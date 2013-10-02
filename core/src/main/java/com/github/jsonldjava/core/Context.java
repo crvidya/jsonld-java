@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.jsonldjava.utils.JSONUtils;
+import com.github.jsonldjava.utils.Obj;
 import com.github.jsonldjava.utils.URL;
 import com.github.jsonldjava.core.JsonLdError.Error;
 
@@ -590,7 +591,7 @@ public class Context extends LinkedHashMap<String, Object> {
             preferredValues.add("@none");
             
             // 2.14)
-            String term = selectTerm(getInverse(), iri, containers, typeLanguage, preferredValues);
+            String term = selectTerm(iri, containers, typeLanguage, preferredValues);
             // 2.15)
             if (term != null) {
             	return term;
@@ -612,54 +613,55 @@ public class Context extends LinkedHashMap<String, Object> {
             }
         }
 
-        // no term of @vocab match, check for possible CURIEs
-        String choice = null;
-        for (final String term : activeCtx.mappings.keySet()) {
-            // skip terms with colons, they can't be prefixes
-            if (term.indexOf(":") != -1) {
+        // 4)
+        String compactIRI = null;
+        // 5)
+        for (final String term : termDefinitions.keySet()) {
+        	final Map<String,Object> termDefinition = (Map<String,Object>) termDefinitions.get(term);
+            // 5.1)
+            if (term.contains(":")) {
                 continue;
             }
-            // skip entries with @ids that are not partial matches
-            final Map<String, Object> definition = (Map<String, Object>) activeCtx.mappings
-                    .get(term);
-            if (definition == null || iri.equals(definition.get("@id"))
-                    || iri.indexOf((String) definition.get("@id")) != 0) {
+            // 5.2)
+            if (termDefinition == null || iri.equals(termDefinition.get("@id"))
+                    || !iri.startsWith((String) termDefinition.get("@id"))) {
                 continue;
             }
 
-            // a CURIE is usable if:
-            // 1. it has no mapping, OR
-            // 2. value is null, which means we're not compacting an @value, AND
-            // the mapping matches the IRI
-            final String curie = term + ":"
-                    + iri.substring(((String) definition.get("@id")).length());
-            final Boolean isUsableCurie = (!activeCtx.mappings.containsKey(curie) || (value == null
-                    && activeCtx.mappings.get(curie) != null && iri
-                    .equals(((Map<String, Object>) activeCtx.mappings.get(curie)).get("@id"))));
-
-            // select curie if it is shorter or the same length but
-            // lexicographically
-            // less than the current choice
-            if (isUsableCurie && (choice == null || compareShortestLeast(curie, choice) < 0)) {
-                choice = curie;
+            // 5.3)
+            final String candidate = term + ":" + iri.substring(((String) termDefinition.get("@id")).length());
+            // 5.4)
+            if ((compactIRI == null || compareShortestLeast(candidate, compactIRI) < 0) && 
+            	(!termDefinition.containsKey(candidate) || iri.equals(((Map<String,Object>) termDefinitions.get(candidate)).get("@id")))) {
+            	compactIRI = candidate;
             }
+            
         }
 
-        // return chosen curie
-        if (choice != null) {
-            return choice;
+        // 6)
+        if (compactIRI != null) {
+            return compactIRI;
         }
 
-        // compact IRI relative to base
+        // 7)
         if (!relativeToVocab) {
-            return removeBase(activeCtx.get("@base"), iri);
+            return removeBase(iri);
         }
 
-        // return IRI as is
+        // 8)
         return iri;
     }
 
-    String compactIri(String iri) {
+    private String removeBase(String iri) {
+		try {
+			return ((new URI((String)this.get("@base"))).relativize(new URI(iri))).toString();
+		} catch (URISyntaxException e) {
+			// TODO: should this be the case
+			return iri;
+		}
+	}
+
+	String compactIri(String iri) {
         return compactIri(iri, null, false, false);
     }
 
@@ -783,35 +785,45 @@ public class Context extends LinkedHashMap<String, Object> {
         // 4)
         return inverse;
     }
-
     
-    ///////////////////////// TODO TODO TODO: this is old code, is it used?!
-    public Object getContextValue(String key, String type) {
-
-        // return null for invalid key
-        if (key == null) {
-            return null;
-        }
-
-        Object rval = null;
-
-        // get default language
-        if ("@language".equals(type) && this.containsKey(type)) {
-            rval = this.get(type);
-        }
-
-        // get specific entry information
-        if (this.termDefinitions.containsKey(key)) {
-            final Map<String, Object> entry = (Map<String, Object>) this.termDefinitions.get(key);
-
-            if (type == null) {
-                rval = entry;
-            } else if (entry.containsKey(type)) {
-                rval = entry.get(type);
+    
+    /**
+     * Term Selection
+     * 
+     * http://json-ld.org/spec/latest/json-ld-api/#term-selection
+     * 
+     * This algorithm, invoked via the IRI Compaction algorithm, makes use of an active context's inverse context to find 
+     * the term that is best used to compact an IRI. Other information about a value associated with the IRI is given, 
+     * including which container mappings and which type mapping or language mapping would be best used to express the value.
+     * 
+     * @return the selected term.
+     */
+    private String selectTerm(String iri, List<String> containers, String typeLanguage, 
+    		List<String> preferredValues) {
+    	Map<String, Object> inv = getInverse();
+    	// 1)
+    	Map<String, Object> containerMap = (Map<String, Object>) inv.get(iri); 
+    	// 2)
+    	for (final String container : containers) {
+    		// 2.1)
+            if (!containerMap.containsKey(container)) {
+                continue;
+            }
+            // 2.2)
+            final Map<String, Object> typeLanguageMap = (Map<String, Object>) containerMap.get(container);
+            // 2.3)
+            final Map<String, Object> valueMap = (Map<String, Object>) typeLanguageMap.get(typeLanguage);
+            // 2.4 )
+            for (final String item : preferredValues) {
+                // 2.4.1
+                if (!valueMap.containsKey(item)) {
+                    continue;
+                }
+                // 2.4.2
+                return (String) typeLanguageMap.get(item);
             }
         }
-
-        return rval;
+    	// 3)
+        return null;
     }
-
 }
