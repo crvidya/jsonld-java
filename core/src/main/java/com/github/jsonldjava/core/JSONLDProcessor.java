@@ -1511,7 +1511,14 @@ public class JSONLDProcessor {
                 // and initialize it to an array whose only item is object.
                 // Finally, continue to the next RDF triple
                 if (RDF_TYPE.equals(predicate) && (object.isIRI() || object.isBlankNode())) {
-                    addValue(node, "@type", object.getValue(), true);
+                    if(opts.useRdfType) {
+                        //addValue(node, RDF_TYPE, object.getValue(), true);
+                        // FIXME: Should be using the useRdfType option here
+                        addValue(node, "@type", object.getValue(), true);
+                    }
+                    else {
+                        addValue(node, "@type", object.getValue(), true);
+                    }
                     continue;
                 }
 
