@@ -117,6 +117,30 @@ public class TurtleRDFParserTest {
         assertTrue(Obj.equals(expected, json));
     }
 
+    @Test
+    public void testRemoveRedundantIdElement() throws JSONLDProcessingError {
+
+        final String input = "<urn:foo> a <urn:myType> .";
+
+        final List<Map<String, Object>> expected = new ArrayList<Map<String, Object>>() {
+            {
+                add(new LinkedHashMap<String, Object>() {
+                    {
+                        put("@id", "urn:foo");
+                        put("@type", "urn:myType");
+                    }
+                });
+            }
+        };
+
+        final Object json = JSONLD.fromRDF(input, new Options() {
+            {
+                format = "text/turtle";
+            }
+        }, new TurtleRDFParser());
+        assertTrue(Obj.equals(expected, json));
+    }
+
     @BeforeClass
     public static void before() {
         if (CACHE_DIR == null) {

@@ -1664,7 +1664,11 @@ public class JSONLDProcessor {
                 }
             }
             node.remove("usages");
-            result.add(node);
+            if (node.containsKey("@id") && node.size() == 1) {
+                // Drop nodes that only included an id element
+            } else {
+                result.add(node);
+            }
         }
 
         return result;
