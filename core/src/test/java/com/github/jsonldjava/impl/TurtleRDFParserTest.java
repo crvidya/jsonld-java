@@ -20,7 +20,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.Options;
 import com.github.jsonldjava.core.RDFDataset;
 import com.github.jsonldjava.core.RDFDataset.Quad;
@@ -34,7 +34,7 @@ import com.github.jsonldjava.utils.Obj;
 public class TurtleRDFParserTest {
 
     // @Test
-    public void simpleTest() throws JSONLDProcessingError {
+    public void simpleTest() throws JsonLdError {
 
         final String input = "@prefix ericFoaf: <http://www.w3.org/People/Eric/ericP-foaf.rdf#> .\n"
                 + "@prefix : <http://xmlns.com/foaf/0.1/> .\n"
@@ -154,7 +154,7 @@ public class TurtleRDFParserTest {
     }
 
     @Test
-    public void runTest() throws IOException, JSONLDProcessingError {
+    public void runTest() throws IOException, JsonLdError {
         final String inputfn = (String) Obj.get(test, "mf:action", "@id");
         final String outputfn = (String) Obj.get(test, "mf:result", "@id");
         final String type = (String) Obj.get(test, "@type");
@@ -187,8 +187,8 @@ public class TurtleRDFParserTest {
                     }
                 });
                 failmsg = "Expected parse error, but no problems detected";
-            } catch (final JSONLDProcessingError e) {
-                if (e.getType() == JSONLDProcessingError.Error.PARSE_ERROR) {
+            } catch (final JsonLdError e) {
+                if (e.getType() == JsonLdError.Error.PARSE_ERROR) {
                     passed = true;
                 } else {
                     failmsg = "Expected parse error, got: " + e.getMessage();

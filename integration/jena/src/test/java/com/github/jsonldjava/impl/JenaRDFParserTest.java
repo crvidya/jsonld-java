@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.ModelFactory;
@@ -22,7 +22,7 @@ public class JenaRDFParserTest {
     private static Logger logger = LoggerFactory.getLogger(JenaRDFParserTest.class);
 
     @Test
-    public void test() throws JSONLDProcessingError {
+    public void test() throws JsonLdError {
 
         final String turtle = "@prefix const: <http://foo.com/> .\n"
                 + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"

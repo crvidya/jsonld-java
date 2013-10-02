@@ -11,7 +11,7 @@ import org.ontoware.rdf2go.model.Statement;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
 /**
@@ -22,7 +22,7 @@ import com.github.jsonldjava.utils.JSONUtils;
 public class RDF2GoTripleCallbackTest {
 
     @Test
-    public void testToRDF() throws JsonParseException, JsonMappingException, JSONLDProcessingError {
+    public void testToRDF() throws JsonParseException, JsonMappingException, JsonLdError {
         final String inputstring = "{ `@id`:`http://nonexistent.com/abox#Document1823812`, `@type`:`http://nonexistent.com/tbox#Document` }"
                 .replace('`', '"');
         final String expectedString = "null - http://nonexistent.com/abox#Document1823812 - http://www.w3.org/1999/02/22-rdf-syntax-ns#type - http://nonexistent.com/tbox#Document";

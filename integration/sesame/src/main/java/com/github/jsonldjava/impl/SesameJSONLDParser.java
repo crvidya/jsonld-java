@@ -16,7 +16,7 @@ import org.openrdf.rio.RDFParser;
 import org.openrdf.rio.helpers.RDFParserBase;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
 /**
@@ -57,7 +57,7 @@ public class SesameJSONLDParser extends RDFParserBase implements RDFParser {
 
         try {
             JSONLD.toRDF(JSONUtils.fromInputStream(in), callback);
-        } catch (final JSONLDProcessingError e) {
+        } catch (final JsonLdError e) {
             throw new RDFParseException("Could not parse JSONLD", e);
         } catch (final RuntimeException e) {
             if (e.getCause() != null && e.getCause() instanceof RDFParseException) {
@@ -75,7 +75,7 @@ public class SesameJSONLDParser extends RDFParserBase implements RDFParser {
 
         try {
             JSONLD.toRDF(JSONUtils.fromReader(reader), callback);
-        } catch (final JSONLDProcessingError e) {
+        } catch (final JsonLdError e) {
             throw new RDFParseException("Could not parse JSONLD", e);
         } catch (final RuntimeException e) {
             if (e.getCause() != null && e.getCause() instanceof RDFParseException) {

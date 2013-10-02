@@ -151,7 +151,7 @@ public class JSONLDProcessorTest {
 
     @AfterClass
     public static void writeReport() throws JsonGenerationException, JsonMappingException,
-            IOException, JSONLDProcessingError {
+            IOException, JsonLdError {
 
         // Only write reports if "-Dreport.format=..." is set
         String reportFormat = System.getProperty("report.format");
@@ -285,7 +285,7 @@ public class JSONLDProcessorTest {
     }
 
     @Test
-    public void runTest() throws URISyntaxException, IOException, JSONLDProcessingError {
+    public void runTest() throws URISyntaxException, IOException, JsonLdError {
         // System.out.println("running test: " + group + test.get("@id") +
         // " :: " + test.get("name"));
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
@@ -412,7 +412,7 @@ public class JSONLDProcessorTest {
             } else {
                 assertFalse("Unknown test type", true);
             }
-        } catch (final JSONLDProcessingError e) {
+        } catch (final JsonLdError e) {
             result = e;
         }
 

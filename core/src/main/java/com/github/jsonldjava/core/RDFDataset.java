@@ -151,9 +151,9 @@ public class RDFDataset extends LinkedHashMap<String, Object> {
          *            true to output native types, false not to.
          * 
          * @return the JSON-LD object.
-         * @throws JSONLDProcessingError
+         * @throws JsonLdError
          */
-        Map<String, Object> toObject(Boolean useNativeTypes) throws JSONLDProcessingError {
+        Map<String, Object> toObject(Boolean useNativeTypes) throws JsonLdError {
             // If value is an an IRI or a blank node identifier, return a new
             // JSON object consisting
             // of a single member @id whose value is set to value.

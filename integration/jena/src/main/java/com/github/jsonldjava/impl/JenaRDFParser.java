@@ -4,7 +4,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.RDFDataset;
 import com.hp.hpl.jena.rdf.model.Literal;
 import com.hp.hpl.jena.rdf.model.Model;
@@ -108,7 +108,7 @@ public class JenaRDFParser implements com.github.jsonldjava.core.RDFParser {
     }
 
     @Override
-    public RDFDataset parse(Object input) throws JSONLDProcessingError {
+    public RDFDataset parse(Object input) throws JsonLdError {
         final RDFDataset result = new RDFDataset();
         // allow null input so we can use importModel and importResource before
         // calling fromRDF
@@ -120,7 +120,7 @@ public class JenaRDFParser implements com.github.jsonldjava.core.RDFParser {
         } else if (input instanceof Model) {
             importModel(result, (Model) input);
         } else {
-            throw new JSONLDProcessingError("Jena Serializer expects Model or resource input");
+            throw new JsonLdError("Jena Serializer expects Model or resource input");
         }
         return result;
     }

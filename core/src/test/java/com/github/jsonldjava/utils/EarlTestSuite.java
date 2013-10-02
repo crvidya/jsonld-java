@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.Options;
 
 public class EarlTestSuite {
@@ -83,7 +83,7 @@ public class EarlTestSuite {
                 this.tests = (List<Map<String, Object>>) Obj.get(this.manifest, "mf:entries",
                         "@list");
 
-            } catch (final JSONLDProcessingError e) {
+            } catch (final JsonLdError e) {
                 throw new RuntimeException(e);
             }
         } else if (manifestURL.endsWith(".jsonld") || manifestURL.endsWith(".json")) {

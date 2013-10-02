@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.github.jsonldjava.core.JSONLDProcessingError.Error;
+import com.github.jsonldjava.core.JsonLdError.Error;
 import com.github.jsonldjava.impl.NQuadRDFParser;
 import com.github.jsonldjava.impl.NQuadTripleCallback;
 import com.github.jsonldjava.impl.TurtleRDFParser;
@@ -39,7 +39,7 @@ public class JSONLD {
      *            (err, compacted, ctx) called once the operation completes.
      */
     public static Object compact(Object input, Object ctx, Options opts)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         // nothing to compact
         if (input == null) {
             return null;
@@ -47,8 +47,8 @@ public class JSONLD {
 
         // NOTE: javascript does this check before input check
         if (ctx == null) {
-            throw new JSONLDProcessingError("The compaction context must not be null.")
-                    .setType(JSONLDProcessingError.Error.COMPACT_ERROR);
+            throw new JsonLdError("The compaction context must not be null.")
+                    .setType(JsonLdError.Error.COMPACT_ERROR);
         }
 
         // set default options
@@ -77,18 +77,18 @@ public class JSONLD {
             } else {
                 expanded = JSONLD.expand(input, opts);
             }
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not expand input before compaction.").setType(
-                    JSONLDProcessingError.Error.COMPACT_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not expand input before compaction.").setType(
+                    JsonLdError.Error.COMPACT_ERROR).setDetail("cause", e);
         }
 
         // process context
-        ActiveContext activeCtx = new ActiveContext(opts);
+        Context activeCtx = new Context(opts);
         try {
             activeCtx = JSONLD.processContext(activeCtx, ctx, opts);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not process context before compaction.")
-                    .setType(JSONLDProcessingError.Error.COMPACT_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not process context before compaction.")
+                    .setType(JsonLdError.Error.COMPACT_ERROR).setDetail("cause", e);
         }
 
         // do compaction
@@ -165,7 +165,7 @@ public class JSONLD {
     }
 
     public static Object compact(Object input, Map<String, Object> ctx)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         return compact(input, ctx, new Options("", true));
     }
 
@@ -179,7 +179,7 @@ public class JSONLD {
      *        not to, defaults to false.
      * @return the expanded result as a list
      */
-    public static List<Object> expand(Object input, Options opts) throws JSONLDProcessingError {
+    public static List<Object> expand(Object input, Options opts) throws JsonLdError {
         if (opts.base == null) {
             opts.base = "";
         }
@@ -194,7 +194,7 @@ public class JSONLD {
 
         // do expansion
         final JSONLDProcessor p = new JSONLDProcessor(opts);
-        Object expanded = p.expand(new ActiveContext(opts), null, input, false);
+        Object expanded = p.expand(new Context(opts), null, input, false);
 
         // optimize away @graph with no other properties
         if (isObject(expanded) && ((Map) expanded).containsKey("@graph")
@@ -213,7 +213,7 @@ public class JSONLD {
         return (List<Object>) expanded;
     }
 
-    public static List<Object> expand(Object input) throws JSONLDProcessingError {
+    public static List<Object> expand(Object input) throws JsonLdError {
         return expand(input, new Options(""));
     }
 
@@ -228,10 +228,10 @@ public class JSONLD {
      *        [loadContext(url, callback(err, url, result))] the context loader.
      * @param callback
      *            (err, flattened) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     public static Object flatten(Object input, Object ctx, Options opts)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         // set default options
         if (opts.base == null) {
             opts.base = "";
@@ -241,9 +241,9 @@ public class JSONLD {
         List<Object> _input;
         try {
             _input = expand(input, opts);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not expand input before flattening.").setType(
-                    JSONLDProcessingError.Error.FLATTEN_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not expand input before flattening.").setType(
+                    JsonLdError.Error.FLATTEN_ERROR).setDetail("cause", e);
         }
 
         final Object flattened = new JSONLDProcessor(opts).flatten(_input);
@@ -258,13 +258,13 @@ public class JSONLD {
         try {
             final Object compacted = compact(flattened, ctx, opts);
             return compacted;
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not compact flattened output.").setType(
-                    JSONLDProcessingError.Error.FLATTEN_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not compact flattened output.").setType(
+                    JsonLdError.Error.FLATTEN_ERROR).setDetail("cause", e);
         }
     }
 
-    public static Object flatten(Object input, Object ctxOrOptions) throws JSONLDProcessingError {
+    public static Object flatten(Object input, Object ctxOrOptions) throws JsonLdError {
         if (ctxOrOptions instanceof Options) {
             return flatten(input, null, (Options) ctxOrOptions);
         } else {
@@ -272,7 +272,7 @@ public class JSONLD {
         }
     }
 
-    public static Object flatten(Object input) throws JSONLDProcessingError {
+    public static Object flatten(Object input) throws JsonLdError {
         return flatten(input, null, new Options(""));
     }
 
@@ -290,10 +290,10 @@ public class JSONLD {
      *        the context loader.
      * @param callback
      *            (err, framed) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     public static Object frame(Object input, Map<String, Object> frame, Options options)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         // set default options
         if (options.base == null) {
             options.base = "";
@@ -318,9 +318,9 @@ public class JSONLD {
         Object expanded;
         try {
             expanded = JSONLD.expand(input, options);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not expand input before framing.").setType(
-                    JSONLDProcessingError.Error.FRAME_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not expand input before framing.").setType(
+                    JsonLdError.Error.FRAME_ERROR).setDetail("cause", e);
         }
         // expand frame
         Object expandedFrame;
@@ -328,9 +328,9 @@ public class JSONLD {
         opts.keepFreeFloatingNodes = true;
         try {
             expandedFrame = JSONLD.expand(frame, opts);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not expand frame before framing.").setType(
-                    JSONLDProcessingError.Error.FRAME_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not expand frame before framing.").setType(
+                    JsonLdError.Error.FRAME_ERROR).setDetail("cause", e);
         }
 
         // do framing
@@ -341,20 +341,20 @@ public class JSONLD {
         try {
             final Object compacted = compact(framed, ctx, opts);
             // get resulting activeCtx
-            final ActiveContext actx = opts.compactResultsActiveCtx;
+            final Context actx = opts.compactResultsActiveCtx;
             // get graph alias
             final String graph = compactIri(actx, "@graph");
             ((Map<String, Object>) compacted).put(graph,
                     removePreserve(actx, ((Map<String, Object>) compacted).get(graph), opts));
             return compacted;
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not compact framed output.").setType(
-                    JSONLDProcessingError.Error.FRAME_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not compact framed output.").setType(
+                    JsonLdError.Error.FRAME_ERROR).setDetail("cause", e);
         }
     }
 
     public static Object frame(Object input, Map<String, Object> frame)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         return frame(input, frame, new Options(""));
     }
 
@@ -371,8 +371,8 @@ public class JSONLD {
      * @param callback
      *            (err, ctx) called once the operation completes.
      */
-    private static ActiveContext processContext(ActiveContext activeCtx, Object localCtx,
-            Options opts) throws JSONLDProcessingError {
+    private static Context processContext(Context activeCtx, Object localCtx,
+            Options opts) throws JsonLdError {
         // set default options
         if (opts.base == null) {
             opts.base = "";
@@ -380,7 +380,7 @@ public class JSONLD {
 
         // return initial context early for null context
         if (localCtx == null) {
-            return new ActiveContext(opts);
+            return new Context(opts);
         }
 
         // retrieve URLs in localCtx
@@ -409,9 +409,9 @@ public class JSONLD {
      *        context loader.
      * @param callback
      *            (err, normalized) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public static Object normalize(Object input, Options options) throws JSONLDProcessingError {
+    public static Object normalize(Object input, Options options) throws JsonLdError {
         if (options.base == null) {
             options.base = "";
         }
@@ -421,15 +421,15 @@ public class JSONLD {
         RDFDataset dataset;
         try {
             dataset = (RDFDataset) toRDF(input, opts);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError(
+        } catch (final JsonLdError e) {
+            throw new JsonLdError(
                     "Could not convert input to RDF dataset before normalization.").setType(
-                    JSONLDProcessingError.Error.NORMALIZE_ERROR).setDetail("cause", e);
+                    JsonLdError.Error.NORMALIZE_ERROR).setDetail("cause", e);
         }
         return new JSONLDProcessor(options).normalize(dataset);
     }
 
-    public static Object normalize(Object input) throws JSONLDProcessingError {
+    public static Object normalize(Object input) throws JsonLdError {
         return normalize(input, new Options(""));
     }
 
@@ -449,7 +449,7 @@ public class JSONLD {
      *            (err, dataset) called once the operation completes.
      */
     public static Object toRDF(Object input, JSONLDTripleCallback callback, Options options)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         if (options.base == null) {
             options.base = "";
         }
@@ -457,9 +457,9 @@ public class JSONLD {
         Object expanded;
         try {
             expanded = JSONLD.expand(input, options);
-        } catch (final JSONLDProcessingError e) {
-            throw new JSONLDProcessingError("Could not expand input before conversion to RDF.")
-                    .setType(JSONLDProcessingError.Error.RDF_ERROR).setDetail("cause", e);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError("Could not expand input before conversion to RDF.")
+                    .setType(JsonLdError.Error.RDF_ERROR).setDetail("cause", e);
         }
 
         final UniqueNamer namer = new UniqueNamer("_:b");
@@ -499,24 +499,24 @@ public class JSONLD {
             } else if ("text/turtle".equals(options.format)) {
                 return new TurtleTripleCallback().call(dataset);
             } else {
-                throw new JSONLDProcessingError("Unknown output format.").setType(
-                        JSONLDProcessingError.Error.UNKNOWN_FORMAT).setDetail("format",
+                throw new JsonLdError("Unknown output format.").setType(
+                        JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format",
                         options.format);
             }
         }
         return dataset;
     }
 
-    public static Object toRDF(Object input, Options options) throws JSONLDProcessingError {
+    public static Object toRDF(Object input, Options options) throws JsonLdError {
         return toRDF(input, null, options);
     }
 
     public static Object toRDF(Object input, JSONLDTripleCallback callback)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         return toRDF(input, callback, new Options(""));
     }
 
-    public static Object toRDF(Object input) throws JSONLDProcessingError {
+    public static Object toRDF(Object input) throws JsonLdError {
         return toRDF(input, new Options(""));
     }
 
@@ -555,7 +555,7 @@ public class JSONLD {
      * @param callback
      *            (err, output) called once the operation completes.
      */
-    public static Object fromRDF(Object dataset, Options options) throws JSONLDProcessingError {
+    public static Object fromRDF(Object dataset, Options options) throws JsonLdError {
         // handle non specified serializer case
 
         RDFParser parser = null;
@@ -568,15 +568,15 @@ public class JSONLD {
         if (rdfParsers.containsKey(options.format)) {
             parser = rdfParsers.get(options.format);
         } else {
-            throw new JSONLDProcessingError("Unknown input format.").setType(
-                    JSONLDProcessingError.Error.UNKNOWN_FORMAT).setDetail("format", options.format);
+            throw new JsonLdError("Unknown input format.").setType(
+                    JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format", options.format);
         }
 
         // convert from RDF
         return fromRDF(dataset, options, parser);
     }
 
-    public static Object fromRDF(Object dataset) throws JSONLDProcessingError {
+    public static Object fromRDF(Object dataset) throws JsonLdError {
         return fromRDF(dataset, new Options(""));
     }
 
@@ -585,7 +585,7 @@ public class JSONLD {
      * 
      */
     public static Object fromRDF(Object input, Options options, RDFParser parser)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         if (options.useRdfType == null) {
             options.useRdfType = false;
         }
@@ -607,18 +607,18 @@ public class JSONLD {
             } else if ("flattened".equals(options.outputForm)) {
                 return flatten(rval, dataset.getContext(), options);
             } else {
-                throw new JSONLDProcessingError("Unknown value for output form").setType(
+                throw new JsonLdError("Unknown value for output form").setType(
                         Error.INVALID_INPUT).setDetail("outputForm", options.outputForm);
             }
         }
         return rval;
     }
 
-    public static Object fromRDF(Object input, RDFParser parser) throws JSONLDProcessingError {
+    public static Object fromRDF(Object input, RDFParser parser) throws JsonLdError {
         return fromRDF(input, new Options(""), parser);
     }
 
-    public static Object simplify(Object input, Options opts) throws JSONLDProcessingError {
+    public static Object simplify(Object input, Options opts) throws JsonLdError {
         // TODO Auto-generated method stub
         if (opts.base == null) {
             opts.base = "";
@@ -626,7 +626,7 @@ public class JSONLD {
         return new JSONLDProcessor(opts).simplify(input);
     }
 
-    public static Object simplify(Object input) throws JSONLDProcessingError {
+    public static Object simplify(Object input) throws JsonLdError {
         return simplify(input, new Options(""));
     }
 }

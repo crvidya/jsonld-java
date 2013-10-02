@@ -27,7 +27,7 @@ import org.openrdf.rio.helpers.StatementCollector;
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.Options;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -101,7 +101,7 @@ public class SesameJSONLDWriter extends RDFWriterBase implements RDFWriter {
                 JSONUtils.write(writer, output);
             }
 
-        } catch (final JSONLDProcessingError e) {
+        } catch (final JsonLdError e) {
             throw new RDFHandlerException("Could not render JSONLD", e);
         } catch (final JsonGenerationException e) {
             throw new RDFHandlerException("Could not render JSONLD", e);

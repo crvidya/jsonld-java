@@ -1,5 +1,6 @@
 package com.github.jsonldjava.core;
 
+import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -42,10 +43,11 @@ public class Options {
     public Boolean keepFreeFloatingNodes = false;
     public Boolean compactArrays = null;
     public Boolean skipExpansion = null;
-    public ActiveContext compactResultsActiveCtx = null;
+    public Context compactResultsActiveCtx = null;
     public String format = null;
     public String outputForm = null;
     public Boolean useNamespaces = false;
+	public Method documentLoader = null;
 
     /**
      * Tells the processor to skip over the key specified by "key" any time it

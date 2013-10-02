@@ -70,13 +70,13 @@ public class JSONLDProcessor {
      * 
      * @return the new active context.
      */
-    ActiveContext processContext(ActiveContext activeCtx, Object localCtx)
-            throws JSONLDProcessingError {
+    Context processContext(Context activeCtx, Object localCtx)
+            throws JsonLdError {
 
         // TODO: get context from cache if available
 
         // initialize the resulting context
-        ActiveContext rval = activeCtx.clone();
+        Context rval = activeCtx.clone();
 
         // normalize local context to an array of @context objects
         if (localCtx instanceof Map && ((Map) localCtx).containsKey("@context")
@@ -96,7 +96,7 @@ public class JSONLDProcessor {
         for (Object ctx : ctxs) {
             if (ctx == null) {
                 // reset to initial context
-                rval = new ActiveContext(opts);
+                rval = new Context(opts);
                 continue;
             }
 
@@ -110,8 +110,8 @@ public class JSONLDProcessor {
             } else {
                 // context must be an object by now, all URLs resolved before
                 // this call
-                throw new JSONLDProcessingError("@context must be an object").setType(
-                        JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", ctx);
+                throw new JsonLdError("@context must be an object").setType(
+                        JsonLdError.Error.SYNTAX_ERROR).setDetail("context", ctx);
             }
 
             // define context mappings for keys in local context
@@ -127,15 +127,15 @@ public class JSONLDProcessor {
                 if (base == null) {
                     base = opts.base;
                 } else if (!isString(base)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; the value of \"@base\" in a "
                                     + "@context must be a string or null.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", ctx);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("context", ctx);
                 } else if (!"".equals(base) && !isAbsoluteIri((String) base)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; the value of \"@base\" in a "
                                     + "@context must be an absolute IRI or the empty string.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("context",
                                     ctx);
                 }
 
@@ -150,15 +150,15 @@ public class JSONLDProcessor {
                 if (value == null) {
                     rval.remove("@vocab");
                 } else if (!isString(value)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; the value of \"@vocab\" in a "
                                     + "@context must be a string or null.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", ctx);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("context", ctx);
                 } else if (!isAbsoluteIri((String) value)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; the value of \"@vocab\" in a "
                                     + "@context must be an absolute IRI.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", ctx);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("context", ctx);
                 } else {
                     rval.put("@vocab", value);
                 }
@@ -171,10 +171,10 @@ public class JSONLDProcessor {
                 if (value == null) {
                     rval.remove("@language");
                 } else if (!isString(value)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; the value of \"@language\" in a "
                                     + "@context must be a string or null.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", ctx);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("context", ctx);
                 } else {
                     rval.put("@language", ((String) value).toLowerCase());
                 }
@@ -215,8 +215,8 @@ public class JSONLDProcessor {
      *         map, but in javascript, `in` will just return false if the result
      *         is a list
      */
-    public Object expand(ActiveContext activeCtx, String activeProperty, Object element,
-            Boolean insideList) throws JSONLDProcessingError {
+    public Object expand(Context activeCtx, String activeProperty, Object element,
+            Boolean insideList) throws JsonLdError {
         // nothing to expand
         if (element == null) {
             return null;
@@ -230,9 +230,9 @@ public class JSONLDProcessor {
                 final Object e = expand(activeCtx, activeProperty, i, insideList);
                 if (insideList && (isArray(e) || isList(e))) {
                     // lists of lists are illegal
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; lists of lists are not permitted.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
+                            .setType(JsonLdError.Error.SYNTAX_ERROR);
                     // drop null values
                 } else if (e != null) {
                     if (isArray(e)) {
@@ -289,16 +289,16 @@ public class JSONLDProcessor {
                 }
 
                 if (isKeyword(expandedProperty) && "@reverse".equals(expandedActiveProperty)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; a keyword cannot be used as a @reverse propery.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value",
                                     value);
                 }
 
                 if ("@id".equals(expandedProperty) && !isString(value)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; \"@id\" value must a string.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value", value);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("value", value);
                 }
 
                 // validate @type value
@@ -308,42 +308,42 @@ public class JSONLDProcessor {
 
                 // @graph must be an array or an object
                 if ("@graph".equals(expandedProperty) && !(isObject(value) || isArray(value))) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; \"@graph\" value must be an object or an array.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value",
                                     value);
                 }
 
                 // @value must not be an object or an array
                 if ("@value".equals(expandedProperty)
                         && (value instanceof Map || value instanceof List)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; \"@value\" value must not be an object or an array.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value",
                                     value);
                 }
 
                 // @language must be a string
                 if ("@language".equals(expandedProperty) && !(value instanceof String)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; \"@language\" value must be a string.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value",
                                     value);
                 }
 
                 // @index must be a string
                 if ("@index".equals(expandedProperty) && !(value instanceof String)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; \"@index\" value must be a string.").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value", value);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("value", value);
                 }
 
                 // @reverse must be an object
                 if ("@reverse".equals(expandedProperty)) {
                     if (!isObject(value)) {
-                        throw new JSONLDProcessingError(
+                        throw new JsonLdError(
                                 "Invalid JSON-LD syntax; \"@reverse\" value must be an object.")
-                                .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail(
+                                .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail(
                                         "value", value);
                     }
 
@@ -386,9 +386,9 @@ public class JSONLDProcessor {
                                     .get(property);
                             for (final Object item : items) {
                                 if (isValue(item) || isList(item)) {
-                                    throw new JSONLDProcessingError(
+                                    throw new JsonLdError(
                                             "Invalid JSON-LD syntax; \"@reverse\" value must not be a @value or an @list.")
-                                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR)
+                                            .setType(JsonLdError.Error.SYNTAX_ERROR)
                                             .setDetail("value", expandedValue);
                                 }
                                 addValue(reverseMap, property, item, true);
@@ -446,9 +446,9 @@ public class JSONLDProcessor {
                         }
                         expandedValue = expand(activeCtx, nextActiveProperty, value, isList);
                         if (isList && isList(expandedValue)) {
-                            throw new JSONLDProcessingError(
+                            throw new JsonLdError(
                                     "Invalid JSON-LD syntax; lists of lists are not permitted.")
-                                    .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
+                                    .setType(JsonLdError.Error.SYNTAX_ERROR);
                         }
                     } else {
                         // recursively expand value with key as new active
@@ -490,9 +490,9 @@ public class JSONLDProcessor {
                     }
                     for (final Object item : (List<Object>) expandedValue) {
                         if (isValue(item) || isList(item)) {
-                            throw new JSONLDProcessingError(
+                            throw new JsonLdError(
                                     "Invalid JSON-LD syntax; \"@reverse\" value must not be a @value or an @list.")
-                                    .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail(
+                                    .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail(
                                             "value", expandedValue);
                         }
                         addValue(reverseMap, expandedProperty, item, true);
@@ -517,9 +517,9 @@ public class JSONLDProcessor {
             if (mval.containsKey("@value")) {
                 // @value must only have @language or @type
                 if (mval.containsKey("@type") && mval.containsKey("@language")) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; an element containing \"@value\" may not contain both \"@type\" and \"@language\".")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("element",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("element",
                                     mval);
                 }
                 int validCount = count - 1;
@@ -530,10 +530,10 @@ public class JSONLDProcessor {
                     validCount -= 1;
                 }
                 if (validCount != 0) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; an element containing \"@value\" may only have an \"@index\" property "
                                     + "and at most one other property which can be \"@type\" or \"@language\".")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("element",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("element",
                                     mval);
                 }
 
@@ -556,10 +556,10 @@ public class JSONLDProcessor {
             // handle @set and @list
             else if (mval.containsKey("@set") || mval.containsKey("@list")) {
                 if (count > 1 && (count != 2 && mval.containsKey("@index"))) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; if an element has the property \"@set\" or \"@list\", then it can have "
                                     + "at most one other property that is \"@index\".").setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("element", mval);
+                            JsonLdError.Error.SYNTAX_ERROR).setDetail("element", mval);
                 }
                 // optimize away @set
                 if (mval.containsKey("@set")) {
@@ -634,8 +634,8 @@ public class JSONLDProcessor {
      * 
      * @return the compacted value.
      */
-    public Object compact(ActiveContext activeCtx, String activeProperty, Object element)
-            throws JSONLDProcessingError {
+    public Object compact(Context activeCtx, String activeProperty, Object element)
+            throws JsonLdError {
 
         // recursively compact array
         if (isArray(element)) {
@@ -805,12 +805,12 @@ public class JSONLDProcessor {
                         }
                         // can't use @list container for more than 1 list
                         else if (rval.containsKey(itemActiveProperty)) {
-                            throw new JSONLDProcessingError(
+                            throw new JsonLdError(
                                     "Invalid JSON-LD compact error; property has a \"@list\" @container "
                                             + "rule but there is more than a single @list that matches "
                                             + "the compacted term in the document. Compaction might mix "
                                             + "unwanted items into the list.")
-                                    .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
+                                    .setType(JsonLdError.Error.SYNTAX_ERROR);
                         }
                     }
 
@@ -880,9 +880,9 @@ public class JSONLDProcessor {
      *            the framing options.
      * 
      * @return the framed output.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public Object frame(Object input, Object frame) throws JSONLDProcessingError {
+    public Object frame(Object input, Object frame) throws JsonLdError {
         // create framing state
         final FramingContext state = new FramingContext();
         // Map<String,Object> state = new HashMap<String, Object>();
@@ -918,10 +918,10 @@ public class JSONLDProcessor {
      *            the parent subject or top-level array.
      * @param property
      *            the parent property, initialized to null.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     private void frame(FramingContext state, Collection<String> subjects, Object frame,
-            Object parent, String property) throws JSONLDProcessingError {
+            Object parent, String property) throws JsonLdError {
         // validate the frame
         validateFrame(state, frame);
         // NOTE: once validated we move to the function where the frame is
@@ -931,7 +931,7 @@ public class JSONLDProcessor {
     }
 
     private void frame(FramingContext state, Collection<String> subjects,
-            Map<String, Object> frame, Object parent, String property) throws JSONLDProcessingError {
+            Map<String, Object> frame, Object parent, String property) throws JsonLdError {
         // filter out subjects that match the frame
         final Map<String, Object> matches = filterSubjects(state, subjects, frame);
 
@@ -1325,15 +1325,15 @@ public class JSONLDProcessor {
      *            the current frame state.
      * @param frame
      *            the frame to validate.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     private static void validateFrame(FramingContext state, Object frame)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         if (!(frame instanceof List) || ((List) frame).size() != 1
                 || !(((List) frame).get(0) instanceof Map)) {
-            throw new JSONLDProcessingError(
+            throw new JsonLdError(
                     "Invalid JSON-LD syntax; a JSON-LD frame must be a single object.").setType(
-                    JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("frame", frame);
+                    JsonLdError.Error.SYNTAX_ERROR).setDetail("frame", frame);
         }
     }
 
@@ -1346,9 +1346,9 @@ public class JSONLDProcessor {
      *            the normalization options.
      * @param callback
      *            (err, normalized) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public Object normalize(Map<String, Object> dataset) throws JSONLDProcessingError {
+    public Object normalize(Map<String, Object> dataset) throws JsonLdError {
         // create quads and map bnodes to their associated quads
         final List<Object> quads = new ArrayList<Object>();
         final Map<String, Object> bnodes = new LinkedHashMap<String, Object>();
@@ -1431,9 +1431,9 @@ public class JSONLDProcessor {
      *            the RDF conversion options.
      * @param callback
      *            (err, output) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public List<Object> fromRDF(final RDFDataset dataset) throws JSONLDProcessingError {
+    public List<Object> fromRDF(final RDFDataset dataset) throws JsonLdError {
         final Map<String, Object> defaultGraph = new LinkedHashMap<String, Object>();
         final Map<String, Map<String, Object>> graphMap = new LinkedHashMap<String, Map<String, Object>>() {
             {
@@ -1677,9 +1677,9 @@ public class JSONLDProcessor {
      *            the expanded JSON-LD to flatten.
      * 
      * @return the flattened output.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public List<Object> flatten(List<Object> input) throws JSONLDProcessingError {
+    public List<Object> flatten(List<Object> input) throws JsonLdError {
         // produce a map of all subjects and name each bnode
         final UniqueNamer namer = new UniqueNamer("_:b");
         final Map<String, Object> graphs = new LinkedHashMap<String, Object>() {
@@ -1840,9 +1840,9 @@ public class JSONLDProcessor {
      * 
      * @param input
      * @return the simplified version of input
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    public Object simplify(Object input) throws JSONLDProcessingError {
+    public Object simplify(Object input) throws JsonLdError {
 
         final Object expanded = JSONLD.expand(input, opts);
         final Map<String, Object> ctx = new LinkedHashMap<String, Object>();

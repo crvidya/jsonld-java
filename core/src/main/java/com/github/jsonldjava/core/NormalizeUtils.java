@@ -32,7 +32,7 @@ class NormalizeUtils {
     }
 
     // generates unique and duplicate hashes for bnodes
-    public Object hashBlankNodes(Collection<String> unnamed_) throws JSONLDProcessingError {
+    public Object hashBlankNodes(Collection<String> unnamed_) throws JsonLdError {
         List<String> unnamed = new ArrayList<String>(unnamed_);
         List<String> nextUnnamed = new ArrayList<String>();
         Map<String, List<String>> duplicates = new LinkedHashMap<String, List<String>>();
@@ -125,8 +125,8 @@ class NormalizeUtils {
                                     }
                                     return rval;
                                 } else {
-                                    throw new JSONLDProcessingError("Unknown output format.")
-                                            .setType(JSONLDProcessingError.Error.UNKNOWN_FORMAT)
+                                    throw new JsonLdError("Unknown output format.")
+                                            .setType(JsonLdError.Error.UNKNOWN_FORMAT)
                                             .setDetail("format", options.format);
                                 }
                             }

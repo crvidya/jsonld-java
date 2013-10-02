@@ -15,7 +15,7 @@ import org.junit.Test;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.JSONLDTripleCallback;
 import com.github.jsonldjava.utils.JSONUtils;
 import com.hp.hpl.jena.rdf.model.Model;
@@ -24,7 +24,7 @@ public class JenaTripleCallbackTest {
 
     @Test
     public void triplesTest() throws JsonParseException, JsonMappingException,
-            JSONLDProcessingError {
+            JsonLdError {
 
         final List<Map<String, Object>> input = new ArrayList<Map<String, Object>>() {
             {

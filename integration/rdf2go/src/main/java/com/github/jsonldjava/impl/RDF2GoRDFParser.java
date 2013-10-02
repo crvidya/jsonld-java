@@ -13,7 +13,7 @@ import org.ontoware.rdf2go.model.node.Node;
 import org.ontoware.rdf2go.model.node.Resource;
 import org.ontoware.rdf2go.model.node.URI;
 
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.RDFDataset;
 import com.github.jsonldjava.core.RDFParser;
 
@@ -112,7 +112,7 @@ public class RDF2GoRDFParser implements RDFParser {
     }
 
     @Override
-    public RDFDataset parse(Object input) throws JSONLDProcessingError {
+    public RDFDataset parse(Object input) throws JsonLdError {
         final RDFDataset result = new RDFDataset();
 
         // empty dataset if no input given
@@ -125,7 +125,7 @@ public class RDF2GoRDFParser implements RDFParser {
         } else if (input instanceof Model) {
             importModel(result, (Model) input);
         } else {
-            throw new JSONLDProcessingError(
+            throw new JsonLdError(
                     "RDF2Go parser expects a Model or ModelSet object as input");
         }
 

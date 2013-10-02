@@ -112,315 +112,6 @@ public class JSONLDUtils {
     }
 
     /**
-     * Creates a term definition during context processing.
-     * 
-     * @param activeCtx
-     *            the current active context.
-     * @param localCtx
-     *            the local context being processed.
-     * @param term
-     *            the term in the local context to define the mapping for.
-     * @param defined
-     *            a map of defining/defined keys to detect cycles and prevent
-     *            double definitions.
-     * @throws JSONLDProcessingError
-     */
-    static void createTermDefinition(ActiveContext activeCtx, Map<String, Object> localCtx,
-            String term, Map<String, Boolean> defined) throws JSONLDProcessingError {
-        if (defined.containsKey(term)) {
-            // term already defined
-            if (defined.get(term)) {
-                return;
-            }
-            // cycle detected
-            throw new JSONLDProcessingError("Cyclical context definition detected.")
-                    .setType(JSONLDProcessingError.Error.CYCLICAL_CONTEXT)
-                    .setDetail("context", localCtx).setDetail("term", term);
-        }
-
-        // now defining term
-        defined.put(term, false);
-
-        if (isKeyword(term)) {
-            throw new JSONLDProcessingError(
-                    "Invalid JSON-LD syntax; keywords cannot be overridden.").setType(
-                    JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("context", localCtx);
-        }
-
-        // remove old mapping
-        activeCtx.mappings.remove(term);
-
-        // get context term value
-        Object value = localCtx.get(term);
-
-        // clean context entry
-        if (value == null
-                || (isObject(value) && // NOTE: object[key] === null will return
-                                       // false if the key doesn't exist in the
-                                       // object
-                        ((Map<String, Object>) value).containsKey("@id") && ((Map<String, Object>) value)
-                        .get("@id") == null)) {
-            activeCtx.mappings.put(term, null);
-            defined.put(term, true);
-            return;
-        }
-
-        // convert short-hand value to object w/@id
-        if (isString(value)) {
-            final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", value);
-            value = tmp;
-        }
-
-        if (!isObject(value)) {
-            throw new JSONLDProcessingError(
-                    "Invalid JSON-LD syntax; @context property values must be string or objects.")
-                    .setDetail("context", localCtx).setType(
-                            JSONLDProcessingError.Error.SYNTAX_ERROR);
-        }
-
-        final Map<String, Object> val = (Map<String, Object>) value;
-
-        // create new mapping
-        final Map<String, Object> mapping = new LinkedHashMap<String, Object>();
-        activeCtx.mappings.put(term, mapping);
-        mapping.put("reverse", false);
-
-        if (val.containsKey("@reverse")) {
-            if (val.containsKey("@id") || val.containsKey("@type") || val.containsKey("@language")) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; a @reverse term definition must not contain @id, @type or @language.")
-                        .setDetail("context", localCtx).setType(
-                                JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            if (!isString(val.get("@reverse"))) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; a @context @reverse value must be a string.")
-                        .setDetail("context", localCtx).setType(
-                                JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            final String reverse = (String) val.get("@reverse");
-
-            // expand and add @id mapping, set @type to @id
-            mapping.put("@id", expandIri(activeCtx, reverse, false, true, localCtx, defined));
-            mapping.put("@type", "@id");
-            mapping.put("reverse", true);
-        } else if (val.containsKey("@id")) {
-            if (!isString(val.get("@id"))) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; a @context @id value must be an array of strings or a string.")
-                        .setDetail("context", localCtx).setType(
-                                JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            final String id = (String) val.get("@id");
-            if (id != null && !id.equals(term)) {
-                // expand and add @id mapping
-                mapping.put("@id", expandIri(activeCtx, id, false, true, localCtx, defined));
-            }
-        }
-
-        if (!mapping.containsKey("@id")) {
-            // see if the term has a prefix
-            final int colon = term.indexOf(':');
-            if (colon != -1) {
-                final String prefix = term.substring(0, colon);
-                if (localCtx.containsKey(prefix)) {
-                    // define parent prefix
-                    createTermDefinition(activeCtx, localCtx, prefix, defined);
-                }
-
-                // set @id based on prefix parent
-                if (activeCtx.mappings.containsKey(prefix)) {
-                    final String suffix = term.substring(colon + 1);
-                    mapping.put(
-                            "@id",
-                            (String) ((Map<String, Object>) activeCtx.mappings.get(prefix))
-                                    .get("@id") + suffix);
-                }
-                // term is an absolute IRI
-                else {
-                    mapping.put("@id", term);
-                }
-            } else {
-                // non-IRIs *must* define @ids if @vocab is not available
-                if (!activeCtx.containsKey("@vocab")) {
-                    throw new JSONLDProcessingError(
-                            "Invalid JSON-LD syntax; @context terms must define an @id.")
-                            .setDetail("context", localCtx).setDetail("term", term)
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
-                }
-                // prepend vocab to term
-                mapping.put("@id", (String) activeCtx.get("@vocab") + term);
-            }
-        }
-
-        // IRI mapping now defined
-        defined.put(term, true);
-
-        if (val.containsKey("@type")) {
-            if (!isString(val.get("@type"))) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; a @context @type values must be strings.")
-                        .setDetail("context", localCtx).setType(
-                                JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            String type = (String) val.get("@type");
-            if (!"@id".equals(type)) {
-                // expand @type to full IRI
-                type = expandIri(activeCtx, type, true, true, localCtx, defined);
-            }
-            mapping.put("@type", type);
-        }
-
-        if (val.containsKey("@container")) {
-            final String container = (String) val.get("@container");
-            if (!"@list".equals(container) && !"@set".equals(container)
-                    && !"@index".equals(container) && !"@language".equals(container)) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; @context @container value must be one of the following: "
-                                + "@list, @set, @index or @language.").setDetail("context",
-                        localCtx).setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            if ((Boolean) mapping.get("reverse") && !"@index".equals(container)) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; @context @container value for a @reverse type "
-                                + "definition must be @index.").setDetail("context", localCtx)
-                        .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-
-            // add @container to mapping
-            mapping.put("@container", container);
-        }
-
-        if (val.containsKey("@language") && !val.containsKey("@type")) {
-
-            if (val.get("@language") != null && !isString(val.get("@language"))) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; @context @language value value must be a string or null.")
-                        .setDetail("context", localCtx).setType(
-                                JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-            String language = (String) val.get("@language");
-
-            // add @language to mapping
-            if (language != null) {
-                language = language.toLowerCase();
-            }
-            mapping.put("@language", language);
-        }
-
-        // disallow aliasing @context and @preserve
-        final String id = (String) mapping.get("@id");
-        if ("@context".equals(id) || "@preserve".equals(id)) {
-            throw new JSONLDProcessingError(
-                    "Invalid JSON-LD syntax; @context and @preserve cannot be aliased.")
-                    .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
-        }
-    }
-
-    /**
-     * Expands a string to a full IRI. The string may be a term, a prefix, a
-     * relative IRI, or an absolute IRI. The associated absolute IRI will be
-     * returned.
-     * 
-     * @param activeCtx
-     *            the current active context.
-     * @param value
-     *            the string to expand.
-     * @param relativeTo
-     *            options for how to resolve relative IRIs: base: true to
-     *            resolve against the base IRI, false not to. vocab: true to
-     *            concatenate after @vocab, false not to.
-     * @param localCtx
-     *            the local context being processed (only given if called during
-     *            context processing).
-     * @param defined
-     *            a map for tracking cycles in context definitions (only given
-     *            if called during context processing).
-     * 
-     * @return the expanded value.
-     * @throws JSONLDProcessingError
-     */
-    static String expandIri(ActiveContext activeCtx, String value, Boolean relativeToBase,
-            Boolean relativeToVocab, Map<String, Object> localCtx, Map<String, Boolean> defined)
-            throws JSONLDProcessingError {
-        // already expanded
-        if (value == null || isKeyword(value)) {
-            return value;
-        }
-
-        // define term dependency if not defined
-        if (localCtx != null && localCtx.containsKey(value)
-                && !Boolean.TRUE.equals(defined.get(value))) {
-            createTermDefinition(activeCtx, localCtx, value, defined);
-        }
-
-        if (relativeToVocab) {
-            final Map<String, Object> mapping = (Map<String, Object>) activeCtx.mappings.get(value);
-
-            // value is explicitly ignored with a null mapping
-            if (mapping == null && activeCtx.mappings.containsKey(value)) {
-                return null;
-            }
-
-            if (mapping != null) {
-                // value is a term
-                return (String) mapping.get("@id");
-            }
-        }
-
-        // split value into prefix:suffix
-        final int colon = value.indexOf(':');
-        if (colon != -1) {
-            final String prefix = value.substring(0, colon);
-            final String suffix = value.substring(colon + 1);
-
-            // do not expand blank nodes (prefix of '_') or already-absolute
-            // IRIs (suffix of '//')
-            if ("_".equals(prefix) || suffix.startsWith("//")) {
-                return value;
-            }
-
-            // prefix dependency not defined, define it
-            if (localCtx != null && localCtx.containsKey(prefix)) {
-                createTermDefinition(activeCtx, localCtx, prefix, defined);
-            }
-
-            // use mapping if prefix is defined
-            if (activeCtx.mappings.containsKey(prefix)) {
-                final String id = ((Map<String, String>) activeCtx.mappings.get(prefix)).get("@id");
-                return id + suffix;
-            }
-
-            // already absolute IRI
-            return value;
-        }
-
-        // prepend vocab
-        if (relativeToVocab && activeCtx.containsKey("@vocab")) {
-            return activeCtx.get("@vocab") + value;
-        }
-
-        // prepend base
-        String rval = value;
-        if (relativeToBase) {
-            rval = prependBase(activeCtx.get("@base"), rval);
-        }
-
-        if (localCtx != null) {
-            // value must now be an absolute IRI
-            if (!isAbsoluteIri(rval)) {
-                throw new JSONLDProcessingError(
-                        "Invalid JSON-LD syntax; a @context value does not expand to an absolue IRI.")
-                        .setDetail("context", localCtx).setDetail("value", value)
-                        .setType(JSONLDProcessingError.Error.SYNTAX_ERROR);
-            }
-        }
-
-        return rval;
-    }
-
-    /**
      * Prepends a base IRI to the given relative IRI.
      * 
      * @param base
@@ -505,10 +196,10 @@ public class JSONLDUtils {
      *            the language map to expand.
      * 
      * @return the expanded language map.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     static List<Object> expandLanguageMap(Map<String, Object> languageMap)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         final List<Object> rval = new ArrayList<Object>();
         final List<String> keys = new ArrayList<String>(languageMap.keySet());
         Collections.sort(keys); // lexicographically sort languages
@@ -522,10 +213,10 @@ public class JSONLDUtils {
             }
             for (final Object item : val) {
                 if (!isString(item)) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; language map values must be strings.")
                             .setDetail("languageMap", languageMap).setType(
-                                    JSONLDProcessingError.Error.SYNTAX_ERROR);
+                                    JsonLdError.Error.SYNTAX_ERROR);
                 }
                 final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
                 tmp.put("@value", item);
@@ -551,22 +242,22 @@ public class JSONLDUtils {
      *            the base IRI to use.
      * 
      * @return the expanded value.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    static Object expandValue(ActiveContext activeCtx, String activeProperty, Object value)
-            throws JSONLDProcessingError {
+    static Object expandValue(Context activeCtx, String activeProperty, Object value)
+            throws JsonLdError {
         // nothing to expand
         if (value == null) {
             return null;
         }
 
         // special-case expand @id and @type (skips '@id' expansion)
-        final String expandedProperty = expandIri(activeCtx, activeProperty, false, true, null,
+        final String expandedProperty = activeCtx.expandIri(activeProperty, false, true, null,
                 null);
         if ("@id".equals(expandedProperty)) {
-            return expandIri(activeCtx, (String) value, true, false, null, null);
+            return activeCtx.expandIri((String) value, true, false, null, null);
         } else if ("@type".equals(expandedProperty)) {
-            return expandIri(activeCtx, (String) value, true, true, null, null);
+            return activeCtx.expandIri((String) value, true, true, null, null);
         }
 
         // get type definition from context
@@ -575,14 +266,14 @@ public class JSONLDUtils {
         // do @id expansion (automatic for @graph)
         if ("@id".equals(type) || ("@graph".equals(expandedProperty) && isString(value))) {
             final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", expandIri(activeCtx, (String) value, true, false, null, null));
+            tmp.put("@id", activeCtx.expandIri((String) value, true, false, null, null));
             return tmp;
         }
 
         // do @id expansion w/vocab
         if ("@vocab".equals(type)) {
             final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", expandIri(activeCtx, (String) value, true, true, null, null));
+            tmp.put("@id", activeCtx.expandIri((String) value, true, true, null, null));
             return tmp;
         }
 
@@ -614,9 +305,9 @@ public class JSONLDUtils {
      * 
      * @param v
      *            the value to check.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    static boolean validateTypeValue(Object v) throws JSONLDProcessingError {
+    static boolean validateTypeValue(Object v) throws JsonLdError {
         if (v == null) {
             throw new NullPointerException("\"@type\" value cannot be null");
         }
@@ -642,208 +333,11 @@ public class JSONLDUtils {
         }
 
         if (!isValid) {
-            throw new JSONLDProcessingError(
+            throw new JsonLdError(
                     "Invalid JSON-LD syntax; \"@type\" value must a string, a subject reference, an array of strings or subject references, or an empty object.")
-                    .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("value", v);
+                    .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value", v);
         }
         return true;
-    }
-
-    /**
-     * Compacts an IRI or keyword into a term or prefix if it can be. If the IRI
-     * has an associated value it may be passed.
-     * 
-     * @param activeCtx
-     *            the active context to use.
-     * @param iri
-     *            the IRI to compact.
-     * @param value
-     *            the value to check or null.
-     * @param relativeTo
-     *            options for how to compact IRIs: vocab: true to split after
-     * @vocab, false not to.
-     * @param reverse
-     *            true if a reverse property is being compacted, false if not.
-     * 
-     * @return the compacted term, prefix, keyword alias, or the original IRI.
-     */
-    static String compactIri(ActiveContext activeCtx, String iri, Object value,
-            boolean relativeToVocab, boolean reverse) {
-        // can't compact null
-        if (iri == null) {
-            return iri;
-        }
-
-        // term is a keyword, default vocab to true
-        if (isKeyword(iri)) {
-            relativeToVocab = true;
-        }
-
-        // use inverse context to pick a term if iri is relative to vocab
-        if (relativeToVocab && activeCtx.getInverse().containsKey(iri)) {
-            String defaultLanguage = (String) activeCtx.get("@language");
-            if (defaultLanguage == null) {
-                defaultLanguage = "@none";
-            }
-
-            // prefer @index if available in value
-            final List<String> containers = new ArrayList<String>();
-            if (isObject(value) && ((Map<String, Object>) value).containsKey("@index")) {
-                containers.add("@index");
-            }
-
-            // defaults for term selection based on type/language
-            String typeOrLanguage = "@language";
-            String typeOrLanguageValue = "@null";
-
-            if (reverse) {
-                typeOrLanguage = "@type";
-                typeOrLanguageValue = "@reverse";
-                containers.add("@set");
-            }
-            // choose the most specific term that works for all elements in
-            // @list
-            else if (isList(value)) {
-                // only select @list containers if @index is NOT in value
-                if (!((Map<String, Object>) value).containsKey("@index")) {
-                    containers.add("@list");
-                }
-                final List<Object> list = (List<Object>) ((Map<String, Object>) value).get("@list");
-                String commonLanguage = (list.size() == 0) ? defaultLanguage : null;
-                String commonType = null;
-                for (final Object item : list) {
-                    String itemLanguage = "@none";
-                    String itemType = "@none";
-                    if (isValue(item)) {
-                        if (((Map<String, Object>) item).containsKey("@language")) {
-                            itemLanguage = (String) ((Map<String, Object>) item).get("@language");
-                        } else if (((Map<String, Object>) item).containsKey("@type")) {
-                            itemType = (String) ((Map<String, Object>) item).get("@type");
-                        }
-                        // plain literal
-                        else {
-                            itemLanguage = "@null";
-                        }
-                    } else {
-                        itemType = "@id";
-                    }
-                    if (commonLanguage == null) {
-                        commonLanguage = itemLanguage;
-                    } else if (!itemLanguage.equals(commonLanguage) && isValue(item)) {
-                        commonLanguage = "@none";
-                    }
-                    if (commonType == null) {
-                        commonType = itemType;
-                    } else if (!itemType.equals(commonType)) {
-                        commonType = "@none";
-                    }
-                    // there are different languages and types in the list, so
-                    // choose
-                    // the most generic term, no need to keep iterating the list
-                    if ("@none".equals(commonLanguage) && "@none".equals(commonType)) {
-                        break;
-                    }
-                }
-                commonLanguage = (commonLanguage != null) ? commonLanguage : "@none";
-                commonType = (commonType != null) ? commonType : "@none";
-                if (!"@none".equals(commonType)) {
-                    typeOrLanguage = "@type";
-                    typeOrLanguageValue = commonType;
-                } else {
-                    typeOrLanguageValue = commonLanguage;
-                }
-            } else {
-                if (isValue(value)) {
-                    if (((Map<String, Object>) value).containsKey("@language")
-                            && !((Map<String, Object>) value).containsKey("@index")) {
-                        containers.add("@language");
-                        typeOrLanguageValue = (String) ((Map<String, Object>) value)
-                                .get("@language");
-                    } else if (((Map<String, Object>) value).containsKey("@type")) {
-                        typeOrLanguage = "@type";
-                        typeOrLanguageValue = (String) ((Map<String, Object>) value).get("@type");
-                    }
-                } else {
-                    typeOrLanguage = "@type";
-                    typeOrLanguageValue = "@id";
-                }
-                containers.add("@set");
-            }
-
-            // do term selection
-            containers.add("@none");
-            final String term = selectTerm(activeCtx, iri, value, containers, typeOrLanguage,
-                    typeOrLanguageValue);
-            if (term != null) {
-                return term;
-            }
-        }
-
-        // no term match, use @vocab if available
-        if (relativeToVocab) {
-            if (activeCtx.containsKey("@vocab")) {
-                // determine if vocab is a prefix of the iri
-                final String vocab = (String) activeCtx.get("@vocab");
-                if (iri.indexOf(vocab) == 0 && !iri.equals(vocab)) {
-                    // use suffix as relative iri if it is not a term in the
-                    // active context
-                    final String suffix = iri.substring(vocab.length());
-                    if (!activeCtx.mappings.containsKey(suffix)) {
-                        return suffix;
-                    }
-                }
-            }
-        }
-
-        // no term of @vocab match, check for possible CURIEs
-        String choice = null;
-        for (final String term : activeCtx.mappings.keySet()) {
-            // skip terms with colons, they can't be prefixes
-            if (term.indexOf(":") != -1) {
-                continue;
-            }
-            // skip entries with @ids that are not partial matches
-            final Map<String, Object> definition = (Map<String, Object>) activeCtx.mappings
-                    .get(term);
-            if (definition == null || iri.equals(definition.get("@id"))
-                    || iri.indexOf((String) definition.get("@id")) != 0) {
-                continue;
-            }
-
-            // a CURIE is usable if:
-            // 1. it has no mapping, OR
-            // 2. value is null, which means we're not compacting an @value, AND
-            // the mapping matches the IRI
-            final String curie = term + ":"
-                    + iri.substring(((String) definition.get("@id")).length());
-            final Boolean isUsableCurie = (!activeCtx.mappings.containsKey(curie) || (value == null
-                    && activeCtx.mappings.get(curie) != null && iri
-                    .equals(((Map<String, Object>) activeCtx.mappings.get(curie)).get("@id"))));
-
-            // select curie if it is shorter or the same length but
-            // lexicographically
-            // less than the current choice
-            if (isUsableCurie && (choice == null || compareShortestLeast(curie, choice) < 0)) {
-                choice = curie;
-            }
-        }
-
-        // return chosen curie
-        if (choice != null) {
-            return choice;
-        }
-
-        // compact IRI relative to base
-        if (!relativeToVocab) {
-            return removeBase(activeCtx.get("@base"), iri);
-        }
-
-        // return IRI as is
-        return iri;
-    }
-
-    static String compactIri(ActiveContext ctx, String iri) {
-        return compactIri(ctx, iri, null, false, false);
     }
 
     /**
@@ -942,7 +436,7 @@ public class JSONLDUtils {
      * 
      * @return the resulting output.
      */
-    static Object removePreserve(ActiveContext ctx, Object input, Options opts) {
+    static Object removePreserve(Context ctx, Object input, Options opts) {
         // recurse through arrays
         if (isArray(input)) {
             final List<Object> output = new ArrayList<Object>();
@@ -1062,7 +556,7 @@ public class JSONLDUtils {
      * 
      * @return the preferred term.
      */
-    private static String selectTerm(ActiveContext activeCtx, String iri, Object value,
+    private static String selectTerm(Context activeCtx, String iri, Object value,
             List<String> containers, String typeOrLanguage, String typeOrLanguageValue) {
         if (typeOrLanguageValue == null) {
             typeOrLanguageValue = "@null";
@@ -1134,10 +628,10 @@ public class JSONLDUtils {
      *            the value to compact.
      * 
      * @return the compaction result.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    static Object compactValue(ActiveContext activeCtx, String activeProperty, Object value)
-            throws JSONLDProcessingError {
+    static Object compactValue(Context activeCtx, String activeProperty, Object value)
+            throws JsonLdError {
         // value is a @value
         if (isValue(value)) {
             // get context rules
@@ -1241,10 +735,10 @@ public class JSONLDUtils {
      *            the name assigned to the current input if it is a bnode.
      * @param list
      *            the list to append to, null for none.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
     static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer, String name, List<Object> list) throws JSONLDProcessingError {
+            UniqueNamer namer, String name, List<Object> list) throws JsonLdError {
         // recurce through array
         if (isArray(input)) {
             for (final Object i : (List<Object>) input) {
@@ -1346,9 +840,9 @@ public class JSONLDUtils {
             // copy non-@type keywords
             if (!"@type".equals(property) && isKeyword(property)) {
                 if ("@index".equals(property) && subjects.containsKey("@index")) {
-                    throw new JSONLDProcessingError(
+                    throw new JsonLdError(
                             "Invalid JSON-LD syntax; conflicting @index property detected.")
-                            .setType(JSONLDProcessingError.Error.SYNTAX_ERROR).setDetail("subject",
+                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("subject",
                                     subject);
                 }
                 subject.put(property, ((Map<String, Object>) input).get(property));
@@ -1412,12 +906,12 @@ public class JSONLDUtils {
     }
 
     static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer, String name) throws JSONLDProcessingError {
+            UniqueNamer namer, String name) throws JsonLdError {
         createNodeMap(input, graphs, graph, namer, name, null);
     }
 
     static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer) throws JSONLDProcessingError {
+            UniqueNamer namer) throws JsonLdError {
         createNodeMap(input, graphs, graph, namer, null, null);
     }
 
@@ -1621,20 +1115,20 @@ public class JSONLDUtils {
      *            (url, callback(err, jsonCtx)) the URL resolver to use.
      * @param callback
      *            (err, input) called once the operation completes.
-     * @throws JSONLDProcessingError
+     * @throws JsonLdError
      */
-    static void resolveContextUrls(Object input) throws JSONLDProcessingError {
+    static void resolveContextUrls(Object input) throws JsonLdError {
         resolve(input, new LinkedHashMap<String, Object>());
     }
 
     private static void resolve(Object input, Map<String, Object> cycles)
-            throws JSONLDProcessingError {
+            throws JsonLdError {
         final Pattern regex = Pattern
                 .compile("(http|https)://(\\w+:{0,1}\\w*@)?(\\S+)(:[0-9]+)?(/|/([\\w#!:.?+=&%@!\\-/]))?");
 
         if (cycles.size() > MAX_CONTEXT_URLS) {
-            throw new JSONLDProcessingError("Maximum number of @context URLs exceeded.").setType(
-                    JSONLDProcessingError.Error.CONTEXT_URL_ERROR).setDetail("max",
+            throw new JsonLdError("Maximum number of @context URLs exceeded.").setType(
+                    JsonLdError.Error.CONTEXT_URL_ERROR).setDetail("max",
                     MAX_CONTEXT_URLS);
         }
 
@@ -1653,8 +1147,8 @@ public class JSONLDUtils {
             if (Boolean.FALSE.equals(urls.get(url))) {
                 // validate URL
                 if (!regex.matcher(url).matches()) {
-                    throw new JSONLDProcessingError("Malformed URL.").setType(
-                            JSONLDProcessingError.Error.INVALID_URL).setDetail("url", url);
+                    throw new JsonLdError("Malformed URL.").setType(
+                            JsonLdError.Error.INVALID_URL).setDetail("url", url);
                 }
                 queue.add(url);
             }
@@ -1665,8 +1159,8 @@ public class JSONLDUtils {
         for (final String url : queue) {
             // check for context URL cycle
             if (cycles.containsKey(url)) {
-                throw new JSONLDProcessingError("Cyclical @context URLs detected.").setType(
-                        JSONLDProcessingError.Error.CONTEXT_URL_ERROR).setDetail("url", url);
+                throw new JsonLdError("Cyclical @context URLs detected.").setType(
+                        JsonLdError.Error.CONTEXT_URL_ERROR).setDetail("url", url);
             }
             final Map<String, Object> _cycles = (Map<String, Object>) clone(cycles);
             _cycles.put(url, Boolean.TRUE);
@@ -1685,14 +1179,14 @@ public class JSONLDUtils {
                     findContextUrls(input, urls, true);
                 }
             } catch (final JsonParseException e) {
-                throw new JSONLDProcessingError("URL does not resolve to a valid JSON-LD object.")
-                        .setType(JSONLDProcessingError.Error.INVALID_URL).setDetail("url", url);
+                throw new JsonLdError("URL does not resolve to a valid JSON-LD object.")
+                        .setType(JsonLdError.Error.INVALID_URL).setDetail("url", url);
             } catch (final MalformedURLException e) {
-                throw new JSONLDProcessingError("Malformed URL.").setType(
-                        JSONLDProcessingError.Error.INVALID_URL).setDetail("url", url);
+                throw new JsonLdError("Malformed URL.").setType(
+                        JsonLdError.Error.INVALID_URL).setDetail("url", url);
             } catch (final IOException e) {
-                throw new JSONLDProcessingError("Unable to open URL.").setType(
-                        JSONLDProcessingError.Error.INVALID_URL).setDetail("url", url);
+                throw new JsonLdError("Unable to open URL.").setType(
+                        JsonLdError.Error.INVALID_URL).setDetail("url", url);
             }
         }
 

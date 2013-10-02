@@ -9,7 +9,7 @@ import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.Options;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -188,8 +188,8 @@ public class Playground {
             }
         } catch (final Exception e) {
             System.out.println("ERROR: " + e.getMessage());
-            if (e instanceof JSONLDProcessingError) {
-                for (final Entry<String, Object> detail : ((JSONLDProcessingError) e).getDetails()
+            if (e instanceof JsonLdError) {
+                for (final Entry<String, Object> detail : ((JsonLdError) e).getDetails()
                         .entrySet()) {
                     System.out.println(detail.getKey() + ": " + detail.getValue());
                 }

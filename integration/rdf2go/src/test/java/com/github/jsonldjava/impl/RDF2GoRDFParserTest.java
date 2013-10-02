@@ -15,7 +15,7 @@ import org.ontoware.rdf2go.model.Model;
 import org.ontoware.rdf2go.model.Syntax;
 
 import com.github.jsonldjava.core.JSONLD;
-import com.github.jsonldjava.core.JSONLDProcessingError;
+import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
 /**
@@ -27,7 +27,7 @@ import com.github.jsonldjava.utils.JSONUtils;
 public class RDF2GoRDFParserTest {
 
     @Test
-    public void testFromRDF() throws JSONLDProcessingError, IOException {
+    public void testFromRDF() throws JsonLdError, IOException {
 
         final String turtle = "@prefix const: <http://foo.com/> .\n"
                 + "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"

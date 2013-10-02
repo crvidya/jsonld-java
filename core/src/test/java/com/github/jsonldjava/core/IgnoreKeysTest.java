@@ -27,7 +27,7 @@ public class IgnoreKeysTest {
     private static final String TEST_DIR = "custom";
 
     // @Test
-    public void expandTest() throws JSONLDProcessingError, IOException {
+    public void expandTest() throws JsonLdError, IOException {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/ignore-0001-in.jsonld");
         final InputStream outputStream = cl.getResourceAsStream(TEST_DIR
@@ -41,7 +41,7 @@ public class IgnoreKeysTest {
     }
 
     // @Test
-    public void compactTest1() throws JSONLDProcessingError, IOException {
+    public void compactTest1() throws JsonLdError, IOException {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/ignore-0002-in.jsonld");
         final InputStream outputStream = cl.getResourceAsStream(TEST_DIR
@@ -59,7 +59,7 @@ public class IgnoreKeysTest {
     }
 
     // @Test
-    public void compactTest2() throws JSONLDProcessingError, IOException {
+    public void compactTest2() throws JsonLdError, IOException {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/ignore-0003-in.jsonld");
         final InputStream outputStream = cl.getResourceAsStream(TEST_DIR
@@ -77,7 +77,7 @@ public class IgnoreKeysTest {
     }
 
     // @Test
-    public void frameTest1() throws JSONLDProcessingError, IOException {
+    public void frameTest1() throws JsonLdError, IOException {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/ignore-0004-in.jsonld");
         final InputStream outputStream = cl.getResourceAsStream(TEST_DIR
@@ -95,7 +95,7 @@ public class IgnoreKeysTest {
     }
 
     // @Test
-    public void toRDFTest() throws JSONLDProcessingError, IOException {
+    public void toRDFTest() throws JsonLdError, IOException {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/ignore-0005-in.jsonld");
         final InputStream expectStream = cl.getResourceAsStream(TEST_DIR + "/toRdf-0001-out.nq");

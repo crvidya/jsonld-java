@@ -459,7 +459,7 @@ public class RDFDatasetUtils {
      * 
      * @return an RDF dataset.
      */
-    public static RDFDataset parseNQuads(String input) throws JSONLDProcessingError {
+    public static RDFDataset parseNQuads(String input) throws JsonLdError {
         // build RDF dataset
         final RDFDataset dataset = new RDFDataset();
 
@@ -477,8 +477,8 @@ public class RDFDatasetUtils {
             // parse quad
             final Matcher match = Regex.QUAD.matcher(line);
             if (!match.matches()) {
-                throw new JSONLDProcessingError("Error while parsing N-Quads; invalid quad.")
-                        .setType(JSONLDProcessingError.Error.PARSE_ERROR).setDetail("line",
+                throw new JsonLdError("Error while parsing N-Quads; invalid quad.")
+                        .setType(JsonLdError.Error.PARSE_ERROR).setDetail("line",
                                 lineNumber);
             }
 
