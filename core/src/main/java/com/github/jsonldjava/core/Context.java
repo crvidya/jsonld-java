@@ -25,7 +25,7 @@ import com.github.jsonldjava.core.JsonLdError.Error;
  * 
  */
 public class Context extends LinkedHashMap<String, Object> {
-
+	
 	private Options options;
 	private Map<String, Object> termDefinitions;	
     public Map<String, Object> inverse = null;
@@ -173,7 +173,7 @@ public class Context extends LinkedHashMap<String, Object> {
     	return result;
     }
 
-	public Object parse(Object localContext) throws JsonLdError {
+	public Context parse(Object localContext) throws JsonLdError {
     	return this.parse(localContext, new ArrayList<String>());
     }
 	
@@ -826,4 +826,53 @@ public class Context extends LinkedHashMap<String, Object> {
     	// 3)
         return null;
     }
+
+    /**
+     * Retrieve container mapping.
+     * 
+     * @param property
+     * @return
+     */
+	public String getContainer(String property) {
+		if ("@graph".equals(property)) {
+			return "@set";
+		}
+		if (JSONLDUtils.isKeyword(property)) {
+			return property;
+		}
+		return (String) ((Map<String,Object>)termDefinitions.get(property)).get("@container");
+	}
+
+	
+	Map<String, Object> getTermDefinition(String key) {
+		return ((Map<String,Object>)termDefinitions.get(key));
+	}
+
+	public Object expandValue(String activeProperty, Object value) throws JsonLdError {
+		Map<String,Object> rval = new LinkedHashMap<String, Object>();
+		Map<String,Object> td = getTermDefinition(activeProperty);
+		// 1)
+		if ("@id".equals(td.get("@type"))) {
+			// TODO: i'm pretty sure value should be a string if the @type is @id
+			rval.put("@id", expandIri(value.toString(), true, false, null, null));
+			return rval;
+		}
+		// 2)
+		if ("@vocab".equals(td.get("@type"))) {
+			// TODO: same as above
+			rval.put("@id", expandIri(value.toString(), true, true, null, null));
+			return rval;
+		}
+		rval.put("@value", value);
+		if (td.containsKey("@type")) {
+			rval.put("@type", td.get("@type"));
+		} else if (value instanceof String) {
+			if (td.get("@language") != null) {
+				rval.put("@language", td.get("@language"));
+			} else if (this.get("@language") != null) {
+				rval.put("@language", this.get("@language"));
+			}
+		}
+		return rval;
+	}
 }

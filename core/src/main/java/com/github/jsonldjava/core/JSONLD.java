@@ -1,6 +1,5 @@
 package com.github.jsonldjava.core;
 
-import static com.github.jsonldjava.core.JSONLDUtils.compactIri;
 import static com.github.jsonldjava.core.JSONLDUtils.createNodeMap;
 import static com.github.jsonldjava.core.JSONLDUtils.isArray;
 import static com.github.jsonldjava.core.JSONLDUtils.isObject;
@@ -85,7 +84,7 @@ public class JSONLD {
         // process context
         Context activeCtx = new Context(opts);
         try {
-            activeCtx = JSONLD.processContext(activeCtx, ctx, opts);
+            activeCtx = activeCtx.parse(ctx);
         } catch (final JsonLdError e) {
             throw new JsonLdError("Could not process context before compaction.")
                     .setType(JsonLdError.Error.COMPACT_ERROR).setDetail("cause", e);
@@ -142,7 +141,7 @@ public class JSONLD {
 
         // add context and/or @graph
         if (isArray(compacted)) {
-            final String kwgraph = compactIri(activeCtx, "@graph");
+            final String kwgraph = activeCtx.compactIri("@graph");
             final Object graph = compacted;
             compacted = new LinkedHashMap<String, Object>();
             if (hasContext) {
@@ -343,7 +342,7 @@ public class JSONLD {
             // get resulting activeCtx
             final Context actx = opts.compactResultsActiveCtx;
             // get graph alias
-            final String graph = compactIri(actx, "@graph");
+            final String graph = actx.compactIri("@graph");
             ((Map<String, Object>) compacted).put(graph,
                     removePreserve(actx, ((Map<String, Object>) compacted).get(graph), opts));
             return compacted;
@@ -356,45 +355,6 @@ public class JSONLD {
     public static Object frame(Object input, Map<String, Object> frame)
             throws JsonLdError {
         return frame(input, frame, new Options(""));
-    }
-
-    /**
-     * Processes a local context, resolving any URLs as necessary, and returns a
-     * new active context in its callback.
-     * 
-     * @param activeCtx
-     *            the current active context.
-     * @param localCtx
-     *            the local context to process.
-     * @param [options] the options to use: [loadContext(url, callback(err, url,
-     *        result))] the context loader.
-     * @param callback
-     *            (err, ctx) called once the operation completes.
-     */
-    private static Context processContext(Context activeCtx, Object localCtx,
-            Options opts) throws JsonLdError {
-        // set default options
-        if (opts.base == null) {
-            opts.base = "";
-        }
-
-        // return initial context early for null context
-        if (localCtx == null) {
-            return new Context(opts);
-        }
-
-        // retrieve URLs in localCtx
-        localCtx = JSONLDUtils.clone(localCtx);
-        if (isString(localCtx)
-                || (isObject(localCtx) && !((Map<String, Object>) localCtx).containsKey("@context"))) {
-            final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@context", localCtx);
-            localCtx = tmp;
-        }
-
-        resolveContextUrls(localCtx);
-
-        return new JSONLDProcessor(opts).processContext(activeCtx, localCtx);
     }
 
     /**
