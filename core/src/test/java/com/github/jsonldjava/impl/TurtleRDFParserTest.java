@@ -19,9 +19,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.github.jsonldjava.core.JSONLD;
+import com.github.jsonldjava.core.JsonLdProcessor;
 import com.github.jsonldjava.core.JsonLdError;
-import com.github.jsonldjava.core.Options;
+import com.github.jsonldjava.core.JsonLdOptions;
 import com.github.jsonldjava.core.RDFDataset;
 import com.github.jsonldjava.core.RDFDataset.Quad;
 import com.github.jsonldjava.core.RDFDatasetUtils;
@@ -110,11 +110,11 @@ public class TurtleRDFParserTest {
             }
         };
 
-        final Object json = JSONLD.fromRDF(input, new Options() {
+        final Object json = null; /*JsonLdProcessor.fromRDF(input, new JsonLdOptions() {
             {
                 format = "text/turtle";
             }
-        }, new TurtleRDFParser());
+        }, new TurtleRDFParser()); */
         assertTrue(JSONUtils.equals(expected, json));
     }
 
@@ -171,22 +171,29 @@ public class TurtleRDFParserTest {
                         + "Result  : " + RDFDatasetUtils.toNQuads(result);
             }
         } else if ("rdft:TestTurtlePositiveSyntax".equals(type)) {
-            JSONLD.fromRDF(input, new Options("http://example/base/") {
+        	/*
+            JsonLdProcessor.fromRDF(input, new JsonLdOptions("http://example/base/") {
                 {
                     format = "text/turtle";
                 }
             });
             passed = true; // otherwise an exception would have been thrown
+            */
+        	// TODO: temporary until new code is done
+        	throw new JsonLdError(JsonLdError.Error.NOT_IMPLEMENTED, "");
         } else if ("rdft:TestTurtleNegativeSyntax".equals(type)
                 || "rdft:TestTurtleNegativeEval".equals(type)) {
             // TODO: need to figure out how to properly deal with negative tests
             try {
-                JSONLD.fromRDF(input, new Options("http://example/base/") {
+            	/*
+                JsonLdProcessor.fromRDF(input, new JsonLdOptions("http://example/base/") {
                     {
                         format = "text/turtle";
                     }
                 });
-                failmsg = "Expected parse error, but no problems detected";
+                */
+            	failmsg = "Expected parse error, but no problems detected";
+            	throw new JsonLdError(JsonLdError.Error.NOT_IMPLEMENTED, "");
             } catch (final JsonLdError e) {
                 if (e.getType() == JsonLdError.Error.PARSE_ERROR) {
                     passed = true;

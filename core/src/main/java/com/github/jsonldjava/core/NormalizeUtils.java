@@ -21,16 +21,16 @@ class NormalizeUtils {
     private final UniqueNamer namer;
     private final Map<String, Object> bnodes;
     private final List<Object> quads;
-    private final Options options;
+    private final JsonLdOptions options;
 
     public NormalizeUtils(List<Object> quads, Map<String, Object> bnodes, UniqueNamer namer,
-            Options options) {
+            JsonLdOptions options) {
         this.options = options;
         this.quads = quads;
         this.bnodes = bnodes;
         this.namer = namer;
     }
-
+    
     // generates unique and duplicate hashes for bnodes
     public Object hashBlankNodes(Collection<String> unnamed_) throws JsonLdError {
         List<String> unnamed = new ArrayList<String>(unnamed_);

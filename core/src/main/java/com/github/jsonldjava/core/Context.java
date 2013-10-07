@@ -7,13 +7,11 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.github.jsonldjava.utils.JSONUtils;
-import com.github.jsonldjava.utils.Obj;
 import com.github.jsonldjava.utils.URL;
 import com.github.jsonldjava.core.JsonLdError.Error;
 
@@ -26,43 +24,62 @@ import com.github.jsonldjava.core.JsonLdError.Error;
  */
 public class Context extends LinkedHashMap<String, Object> {
 	
-	private Options options;
+	private JsonLdOptions options;
 	private Map<String, Object> termDefinitions;	
     public Map<String, Object> inverse = null;
     
 	public Context() {
-        this(new Options());
+        this(new JsonLdOptions());
     }
 
-    public Context(Options options) {
+    public Context(JsonLdOptions options) {
         super();
         init(options);
     }
 
-    public Context(Map<String, Object> map, Options options) {
+    public Context(Map<String, Object> map, JsonLdOptions options) {
         super(map);
         init(options);
     }
 
     public Context(Map<String, Object> map) {
         super(map);
-        init(new Options());
+        init(new JsonLdOptions());
     }
 
 	
-    private void init(Options options) {
+    private void init(JsonLdOptions options) {
     	this.options = options;
-    	if (options.base != null) { 
-    		this.put("@base", URL.parse(options.base).toString());
+    	if (options.getBase() != null) { 
+    		this.put("@base", options.getBase());
     	}
         this.termDefinitions = new LinkedHashMap<String, Object>();
     }
 	
 	private String resolveURI(String baseUri, String pathToResolve) {
-		// NOTE: if uri doesn't end with /, resolve just joins the two strings (without adding a / itself). adding an extra / if one doesn't exist
-		// doesn't break anything, so it's safer to add it
+		// TODO: some input will need to be normalized to perform the expected result with java
+		//System.out.println(baseUri + " -- " + pathToResolve);
+		if (baseUri == null) {
+			return pathToResolve;
+		}
+		if (pathToResolve == null || "".equals(pathToResolve.trim())) {
+			return baseUri;
+		}
 		try {
-			return new URI(baseUri != null ? baseUri + "/" : "").resolve(pathToResolve).toString();
+			URI uri = new URI(baseUri);
+			// query string parsing
+			if (pathToResolve.startsWith("?")) {
+				// drop fragment from uri if it has one
+				if (uri.getFragment() != null) {
+					uri = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null);
+				}
+				// add query to the end manually (as URI.resolve does it wrong)
+				return uri.toString() + pathToResolve;
+			}
+			
+			uri = uri.resolve(pathToResolve);
+			// java doesn't discard unnecessary dot segments
+			return new URI(uri.getScheme(), uri.getAuthority(), URL.removeDotSegments(uri.getPath(), true), uri.getQuery(), uri.getFragment()).toString();
 		} catch (URISyntaxException e) {
 			return null;
 		}
@@ -79,18 +96,26 @@ public class Context extends LinkedHashMap<String, Object> {
      * @throws JsonLdError 
      */
     public Context parse(Object localContext, List<String> remoteContexts) throws JsonLdError {
+    	if (remoteContexts == null) {
+    		remoteContexts = new ArrayList<String>();
+    	}
     	// 1. Initialize result to the result of cloning active context.
-    	Context result = this;
-    	
+    	Context result = this.clone(); // TODO: clone?
+    	// 2)
     	if (!(localContext instanceof List)) {
     		Object temp = localContext;
     		localContext = new ArrayList<Object>();
     		((List<Object>) localContext).add(temp);
     	}
+    	// 3)
     	for (Object context : ((List<Object>)localContext)) {
+    		// 3.1)
     		if (context == null) {
     			result = new Context(this.options);
-    		} if (context instanceof String) {
+    			continue;
+    		}
+    		// 3.2)
+    		else if (context instanceof String) {
     			String uri = (String)result.get("@base");
     			uri = resolveURI(uri, (String)context);
 				// 3.2.2
@@ -279,34 +304,32 @@ public class Context extends LinkedHashMap<String, Object> {
         definition.put("@reverse", false);
         
         // 13)
-        if (val.containsKey("@id")) {
+        if (val.get("@id") != null && !term.equals(val.get("@id"))) { 
         	if (!(val.get("@id") instanceof String)) {
                 throw new JsonLdError(Error.INVALID_IRI_MAPPING, "expected value of @id to be a string");
             }
-            final String id = (String) val.get("@id");
-            if (id != null && !id.equals(term)) { 
-                String res = this.expandIri(id, false, true, context, defined);
-                if (JSONLDUtils.isKeyword(res) || JSONLDUtils.isAbsoluteIri(res)) {
-                	if ("@context".equals(res)) {
-                		throw new JsonLdError(Error.INVALID_KEYWORD_ALIAS, "cannot alias @context");
-                	}
-                	definition.put("@id", res);	
-                } else {
-                	throw new JsonLdError(Error.INVALID_IRI_MAPPING, "resulting IRI mapping should be a keyword, absolute IRI or blank node");
-                }
+             
+            String res = this.expandIri((String)val.get("@id"), false, true, context, defined);
+            if (JSONLDUtils.isKeyword(res) || JSONLDUtils.isAbsoluteIri(res)) {
+            	if ("@context".equals(res)) {
+            		throw new JsonLdError(Error.INVALID_KEYWORD_ALIAS, "cannot alias @context");
+            	}
+            	definition.put("@id", res);	
+            } else {
+            	throw new JsonLdError(Error.INVALID_IRI_MAPPING, "resulting IRI mapping should be a keyword, absolute IRI or blank node");
             }
         }
         
         // 14)
-        int colIndex = term.indexOf(":");
-        if (colIndex >= 0) {
+        else if (term.indexOf(":") >= 0) {
+        	int colIndex = term.indexOf(":");
         	String prefix = term.substring(0, colIndex);
         	String suffix = term.substring(colIndex+1);
         	if (context.containsKey(prefix)) {
         		this.createTermDefinition(context, prefix, defined);
         	}
         	if (termDefinitions.containsKey(prefix)) {
-        		definition.put("@id", termDefinitions.get(prefix) + suffix);
+        		definition.put("@id", ((Map<String,Object>) termDefinitions.get(prefix)).get("@id") + suffix);
         	} else {
         		definition.put("@id", term);
         	}
@@ -367,7 +390,12 @@ public class Context extends LinkedHashMap<String, Object> {
     	}
     	// 3)
     	if (vocab && this.termDefinitions.containsKey(value)) {
-    		return (String) ((LinkedHashMap<String, Object>) this.termDefinitions.get(value)).get("@id");
+    		Map<String, Object> td = (LinkedHashMap<String, Object>) this.termDefinitions.get(value);
+    		if (td != null) {
+    			return (String) td.get("@id");
+    		} else {
+    			return null;
+    		}
     	}
     	// 4)
     	int colIndex = value.indexOf(":");
@@ -669,7 +697,8 @@ public class Context extends LinkedHashMap<String, Object> {
     @Override
     public Context clone() {
         Context rval = (Context) super.clone();
-        // TODO: should we clone all the termDefinitions/inverse etc as well?
+        // TODO: is this shallow copy enough? probably not, but it passes all the tests!
+        rval.termDefinitions = new LinkedHashMap<String,Object>(this.termDefinitions);
         return rval;
     }
     
@@ -840,9 +869,22 @@ public class Context extends LinkedHashMap<String, Object> {
 		if (JSONLDUtils.isKeyword(property)) {
 			return property;
 		}
-		return (String) ((Map<String,Object>)termDefinitions.get(property)).get("@container");
+		Map<String,Object> termDefinition = (Map<String,Object>)termDefinitions.get(property);
+		if (termDefinition == null) {
+			return null;
+		}
+		return (String) termDefinition.get("@container");
 	}
 
+	public Boolean isReverseProperty(String property) {
+		Map<String,Object> termDefinition = (Map<String,Object>)termDefinitions.get(property);
+		if (termDefinition == null) {
+			return false;
+		}
+		Object reverse = termDefinition.get("@reverse");
+		return reverse != null && (Boolean)reverse;
+	}
+	
 	
 	Map<String, Object> getTermDefinition(String key) {
 		return ((Map<String,Object>)termDefinitions.get(key));
@@ -852,27 +894,43 @@ public class Context extends LinkedHashMap<String, Object> {
 		Map<String,Object> rval = new LinkedHashMap<String, Object>();
 		Map<String,Object> td = getTermDefinition(activeProperty);
 		// 1)
-		if ("@id".equals(td.get("@type"))) {
+		if (td != null && "@id".equals(td.get("@type"))) {
 			// TODO: i'm pretty sure value should be a string if the @type is @id
 			rval.put("@id", expandIri(value.toString(), true, false, null, null));
 			return rval;
 		}
 		// 2)
-		if ("@vocab".equals(td.get("@type"))) {
+		if (td != null && "@vocab".equals(td.get("@type"))) {
 			// TODO: same as above
 			rval.put("@id", expandIri(value.toString(), true, true, null, null));
 			return rval;
 		}
+		// 3)
 		rval.put("@value", value);
-		if (td.containsKey("@type")) {
+		// 4)
+		if (td != null && td.containsKey("@type")) {
 			rval.put("@type", td.get("@type"));
-		} else if (value instanceof String) {
-			if (td.get("@language") != null) {
-				rval.put("@language", td.get("@language"));
-			} else if (this.get("@language") != null) {
+		}
+		// 5)
+		else if (value instanceof String) {
+			// 5.1)
+			if (td != null && td.containsKey("@language")) {
+				String lang = (String) td.get("@language");
+				if (lang != null) {
+					rval.put("@language", lang);
+				}
+			}
+			// 5.2)
+			else if (this.get("@language") != null) {
 				rval.put("@language", this.get("@language"));
 			}
 		}
 		return rval;
 	}
+
+	public Object getContextValue(String activeProperty, String string) throws JsonLdError {
+		throw new JsonLdError(Error.NOT_IMPLEMENTED, "getContextValue is only used by old code so far and thus isn't implemented");
+	}
+	
+	
 }

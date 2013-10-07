@@ -435,8 +435,9 @@ public class JSONLDUtils {
      *            the compaction options used.
      * 
      * @return the resulting output.
+     * @throws JsonLdError 
      */
-    static Object removePreserve(Context ctx, Object input, Options opts) {
+    static Object removePreserve(Context ctx, Object input, JsonLdOptions opts) throws JsonLdError {
         // recurse through arrays
         if (isArray(input)) {
             final List<Object> output = new ArrayList<Object>();
@@ -473,7 +474,7 @@ public class JSONLDUtils {
             for (final String prop : ((Map<String, Object>) input).keySet()) {
                 Object result = removePreserve(ctx, ((Map<String, Object>) input).get(prop), opts);
                 final String container = (String) ctx.getContextValue(prop, "@container");
-                if (opts.compactArrays && isArray(result) && ((List<Object>) result).size() == 1
+                if (opts.getCompactArrays() && isArray(result) && ((List<Object>) result).size() == 1
                         && container == null) {
                     result = ((List<Object>) result).get(0);
                 }
@@ -536,111 +537,6 @@ public class JSONLDUtils {
             return 1;
         }
         return Integer.signum(a.compareTo(b));
-    }
-
-    
-
-    /**
-     * Performs value compaction on an object with '@value' or '@id' as the only
-     * property.
-     * 
-     * @param activeCtx
-     *            the active context.
-     * @param activeProperty
-     *            the active property that points to the value.
-     * @param value
-     *            the value to compact.
-     * 
-     * @return the compaction result.
-     * @throws JsonLdError
-     */
-    static Object compactValue(Context activeCtx, String activeProperty, Object value)
-            throws JsonLdError {
-        // value is a @value
-        if (isValue(value)) {
-            // get context rules
-            final String type = (String) activeCtx.getContextValue(activeProperty, "@type");
-            final String language = (String) activeCtx.getContextValue(activeProperty, "@language");
-            final String container = (String) activeCtx.getContextValue(activeProperty,
-                    "@container");
-
-            // whether or not the value has an @index that must be preserved
-            final Boolean preserveIndex = (((Map<String, Object>) value).containsKey("@index") && !"@index"
-                    .equals(container));
-
-            // if there's no @index to preserve ...
-            if (!preserveIndex) {
-                // matching @type or @language specified in context, compact
-                // value
-                if ((((Map<String, Object>) value).containsKey("@type") && JSONUtils.equals(
-                        ((Map<String, Object>) value).get("@type"), type))
-                        || (((Map<String, Object>) value).containsKey("@language") && JSONUtils
-                                .equals(((Map<String, Object>) value).get("@language"), language))) {
-                    // NOTE: have to check containsKey here as javascript
-                    // version relies on undefined !== null
-                    return ((Map<String, Object>) value).get("@value");
-                }
-            }
-
-            // return just the value of @value if all are true:
-            // 1. @value is the only key or @index isn't being preserved
-            // 2. there is no default language or @value is not a string or
-            // the key has a mapping with a null @language
-            final int keyCount = ((Map<String, Object>) value).size();
-            final Boolean isValueOnlyKey = (keyCount == 1 || (keyCount == 2
-                    && ((Map<String, Object>) value).containsKey("@index") && !preserveIndex));
-            final Boolean hasDefaultLanguage = activeCtx.containsKey("@language");
-            final Boolean isValueString = isString(((Map<String, Object>) value).get("@value"));
-            final Boolean hasNullMapping = activeCtx.mappings.containsKey(activeProperty)
-                    && ((Map<String, Object>) activeCtx.mappings.get(activeProperty))
-                            .containsKey("@language")
-                    && Obj.get(activeCtx.mappings, activeProperty, "@language") == null;
-            if (isValueOnlyKey && (!hasDefaultLanguage || !isValueString || hasNullMapping)) {
-                return ((Map<String, Object>) value).get("@value");
-            }
-
-            final Map<String, Object> rval = new LinkedHashMap<String, Object>();
-
-            // preserve @index
-            if (preserveIndex) {
-                rval.put(compactIri(activeCtx, "@index"),
-                        ((Map<String, Object>) value).get("@index"));
-            }
-
-            // compact @type IRI
-            if (((Map<String, Object>) value).containsKey("@type")) {
-                rval.put(
-                        compactIri(activeCtx, "@type"),
-                        compactIri(activeCtx, (String) ((Map<String, Object>) value).get("@type"),
-                                null, true, false));
-            }
-            // alias @language
-            else if (((Map<String, Object>) value).containsKey("@language")) {
-                rval.put(compactIri(activeCtx, "@language"),
-                        ((Map<String, Object>) value).get("@language"));
-            }
-
-            // alias @value
-            rval.put(compactIri(activeCtx, "@value"), ((Map<String, Object>) value).get("@value"));
-
-            return rval;
-        }
-
-        // value is a subject reference
-        final String expandedProperty = expandIri(activeCtx, activeProperty, false, true, null,
-                null);
-        final String type = (String) activeCtx.getContextValue(activeProperty, "@type");
-        final Object compacted = compactIri(activeCtx,
-                (String) ((Map<String, Object>) value).get("@id"), null, "@vocab".equals(type),
-                false);
-
-        if ("@id".equals(type) || "@vocab".equals(type) || "@graph".equals(type)) {
-            return compacted;
-        }
-
-        final Map<String, Object> rval = new LinkedHashMap<String, Object>();
-        rval.put(compactIri(activeCtx, "@id"), compacted);
-        return rval;
     }
 
     /**
