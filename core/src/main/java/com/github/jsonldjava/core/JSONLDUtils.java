@@ -986,7 +986,7 @@ public class JSONLDUtils {
             _cycles.put(url, Boolean.TRUE);
 
             try {
-                Map<String, Object> ctx = (Map<String, Object>) JSONUtils.fromURL(new java.net.URL(
+                Map<String, Object> ctx = (Map<String, Object>) DocumentLoader.fromURL(new java.net.URL(
                         url));
                 if (!ctx.containsKey("@context")) {
                     ctx = new LinkedHashMap<String, Object>();

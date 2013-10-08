@@ -239,8 +239,8 @@ public class jsonLdProcessorTest {
                     .get("sequence")) {
                 final List<String> testType = (List<String>) test.get("@type");
                 if (
-                testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name"))
-                      //  || testType.contains("jld:CompactTest")
+                (testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name")))
+                || testType.contains("jld:CompactTest")
                       //  || testType.contains("jld:FlattenTest")
                       //  || testType.contains("jld:FrameTest") || testType.contains("jld:ToRDFTest")
                       //  || testType.contains("jld:NormalizeTest")
@@ -376,21 +376,28 @@ public class jsonLdProcessorTest {
 
         final JsonLdOptions options = new JsonLdOptions("http://json-ld.org/test-suite/tests/"
                 + test.get("input"));
-        Object contextJson = null;
         if (test.containsKey("option")) {
-        	Map<String,String> test_opts = (Map<String, String>) test.get("option");
+        	Map<String,Object> test_opts = (Map<String, Object>) test.get("option");
         	if (test_opts.containsKey("base")) {
-        		options.setBase(test_opts.get("base"));
+        		options.setBase((String)test_opts.get("base"));
         	}
         	if (test_opts.containsKey("expandContext")) {
         		final InputStream contextStream = cl.getResourceAsStream(TEST_DIR + "/"
                         + test_opts.get("expandContext"));
-                contextJson = JSONUtils.fromInputStream(contextStream);
+                options.setExpandContext(JSONUtils.fromInputStream(contextStream));
+        	}
+        	if (test_opts.containsKey("compactArrays")) {
+        		options.setCompactArrays((Boolean)test_opts.get("compactArrays"));
         	}
         }
         try {
         	if (testType.contains("jld:ExpandTest")) {
-        		result = JsonLdProcessor.expand(input, contextJson, options);
+        		result = JsonLdProcessor.expand(input, options);
+        	}  else if (testType.contains("jld:CompactTest")) {
+                final InputStream contextStream = cl.getResourceAsStream(TEST_DIR + "/"
+                        + test.get("context"));
+                final Object contextJson = JSONUtils.fromInputStream(contextStream);
+                result = JsonLdProcessor.compact(input, contextJson, options);
         	}
             /*
             if (testType.contains("jld:NormalizeTest")) {

@@ -48,7 +48,12 @@ public class Context extends LinkedHashMap<String, Object> {
     }
 
 	
-    private void init(JsonLdOptions options) {
+    public Context(Object context, JsonLdOptions opts) {
+    	// TODO: load remote context
+		super(context instanceof Map ? (Map<String,Object>)context : null);
+	}
+
+	private void init(JsonLdOptions options) {
     	this.options = options;
     	if (options.getBase() != null) { 
     		this.put("@base", options.getBase());
@@ -56,36 +61,60 @@ public class Context extends LinkedHashMap<String, Object> {
         this.termDefinitions = new LinkedHashMap<String, Object>();
     }
 	
-	private String resolveURI(String baseUri, String pathToResolve) {
-		// TODO: some input will need to be normalized to perform the expected result with java
-		//System.out.println(baseUri + " -- " + pathToResolve);
-		if (baseUri == null) {
-			return pathToResolve;
+	/**
+	 * Value Compaction Algorithm
+	 * 
+	 * http://json-ld.org/spec/latest/json-ld-api/#value-compaction
+	 * 
+	 * @param activeProperty
+	 * @param element
+	 * @return
+	 */
+	public Object compactValue(String activeProperty, Map<String,Object> value) {
+		// 1)
+		int numberMembers = value.size();
+		// 2)
+		if (value.containsKey("@index") && "@index".equals(this.getContainer(activeProperty))) {
+			numberMembers--;
 		}
-		if (pathToResolve == null || "".equals(pathToResolve.trim())) {
-			return baseUri;
-		}
-		try {
-			URI uri = new URI(baseUri);
-			// query string parsing
-			if (pathToResolve.startsWith("?")) {
-				// drop fragment from uri if it has one
-				if (uri.getFragment() != null) {
-					uri = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null);
-				}
-				// add query to the end manually (as URI.resolve does it wrong)
-				return uri.toString() + pathToResolve;
+		// 3)
+		if (numberMembers > 2) return value;
+		// 4)
+		String typeMapping = getTypeMapping(activeProperty);
+		String languageMapping = getLanguageMapping(activeProperty);
+		if (value.containsKey("@id")) {
+			// 4.1)
+			if (numberMembers == 1 && "@id".equals(typeMapping)) {
+				return compactIri((String) value.get("@id"));
 			}
-			
-			uri = uri.resolve(pathToResolve);
-			// java doesn't discard unnecessary dot segments
-			return new URI(uri.getScheme(), uri.getAuthority(), URL.removeDotSegments(uri.getPath(), true), uri.getQuery(), uri.getFragment()).toString();
-		} catch (URISyntaxException e) {
-			return null;
+			// 4.2)
+			if (numberMembers == 1 && "@vocab".equals(typeMapping)) {
+				return compactIri((String) value.get("@id"), true);
+			}
+			// 4.3)
+			return value;
 		}
+		Object valueValue = value.get("@value");
+		// 5)
+		if (value.containsKey("@type") && JSONUtils.equals(value.get("@type"), typeMapping)) {
+			return valueValue;
+		}
+		// 6)
+		if (value.containsKey("@language")) {
+			// TODO: SPEC: doesn't specify to check default language as well
+			if (JSONUtils.equals(value.get("@language"), languageMapping) || JSONUtils.equals(value.get("@language"), this.get("@language"))) {
+				return valueValue;
+			}
+		}
+		// 7)
+		if (numberMembers == 1 && (!(valueValue instanceof String) || !this.containsKey("@language") || (getTermDefinition(activeProperty).containsKey("@language") && languageMapping == null))) {
+			return valueValue;
+		}
+		// 8)
+		return value;
 	}
-	
-    /**
+
+	/**
      * Context Processing Algorithm
      * 
      * http://json-ld.org/spec/latest/json-ld-api/#context-processing-algorithms
@@ -117,7 +146,7 @@ public class Context extends LinkedHashMap<String, Object> {
     		// 3.2)
     		else if (context instanceof String) {
     			String uri = (String)result.get("@base");
-    			uri = resolveURI(uri, (String)context);
+    			uri = URL.resolve(uri, (String)context);
 				// 3.2.2
 				if (remoteContexts.contains(uri)) {
 					throw new JsonLdError(Error.RERCURSIVE_CONTEXT_INCLUSION, (String)context);
@@ -126,7 +155,8 @@ public class Context extends LinkedHashMap<String, Object> {
 
 				// 3.2.3: Dereference context
 				try {
-					Object remoteContext = JSONUtils.fromURL(new java.net.URL(uri));
+					RemoteDocument rd = this.options.documentLoader.loadDocument(uri);
+					Object remoteContext = rd.document;
 					if (!(remoteContext instanceof Map) || !((Map<String,Object>)remoteContext).containsKey("@context")) {
 						// If the dereferenced document has no top-level JSON object with an @context member
 						throw new JsonLdError(Error.INVALID_REMOTE_CONTEXT, (String)context);
@@ -158,7 +188,7 @@ public class Context extends LinkedHashMap<String, Object> {
     				if (!JSONLDUtils.isAbsoluteIri(baseUri)) {
     					throw new JsonLdError(Error.INVALID_BASE_IRI, baseUri);
     				}
-    				result.put("@base", resolveURI(baseUri, value));
+    				result.put("@base", URL.resolve(baseUri, value));
     			}
     		}
     		
@@ -385,7 +415,7 @@ public class Context extends LinkedHashMap<String, Object> {
     		return value;
     	}
     	// 2)
-    	if (context != null && context.containsKey(value) && !(defined.get(value))) {
+    	if (context != null && context.containsKey(value) && !Boolean.TRUE.equals(defined.get(value))) {
     		this.createTermDefinition(context, value, defined);
     	}
     	// 3)
@@ -428,7 +458,7 @@ public class Context extends LinkedHashMap<String, Object> {
     		// 		 i'm not sure if the base that's passed in as an option
     		//		 should override the @base in the context or if the @context
     		//		 should even be able to have a @base
-    		value = resolveURI((String) this.get("@base"), value);
+    		value = URL.resolve((String) this.get("@base"), value);
     	}
     	// 7)
 		return value;
@@ -487,7 +517,7 @@ public class Context extends LinkedHashMap<String, Object> {
                 containers.add("@set");
             }
             // 2.6)
-            else if (JSONLDUtils.isList(value)) {
+            else if (value instanceof Map && ((Map<String, Object>) value).containsKey("@list")) {
                 // 2.6.1)
                 if (!((Map<String, Object>) value).containsKey("@index")) {
                     containers.add("@list");
@@ -559,7 +589,7 @@ public class Context extends LinkedHashMap<String, Object> {
             // 2.7)
             else {
             	// 2.7.1)
-                if (JSONLDUtils.isValue(value)) {
+                if (value instanceof Map && ((Map<String, Object>) value).containsKey("@value")) {
                 	// 2.7.1.1)
                     if (((Map<String, Object>) value).containsKey("@language")
                             && !((Map<String, Object>) value).containsKey("@index")) {
@@ -596,7 +626,7 @@ public class Context extends LinkedHashMap<String, Object> {
             }
             // 2.12)
             if (("@reverse".equals(typeLanguageValue) || "@id".equals(typeLanguageValue)) && 
-            		((Map<String,Object>)value).containsKey("@id")) {
+            		(value instanceof Map) && ((Map<String,Object>)value).containsKey("@id")) {
             	// 2.12.1)
             	String result = this.compactIri((String)((Map<String,Object>)value).get("@id"), null, true, true);
             	if (termDefinitions.containsKey(result) && 
@@ -660,7 +690,8 @@ public class Context extends LinkedHashMap<String, Object> {
             final String candidate = term + ":" + iri.substring(((String) termDefinition.get("@id")).length());
             // 5.4)
             if ((compactIRI == null || compareShortestLeast(candidate, compactIRI) < 0) && 
-            	(!termDefinition.containsKey(candidate) || iri.equals(((Map<String,Object>) termDefinitions.get(candidate)).get("@id")))) {
+            	(!termDefinitions.containsKey(candidate) || 
+            			(iri.equals(((Map<String,Object>) termDefinitions.get(candidate)).get("@id")) && value == null))) {
             	compactIRI = candidate;
             }
             
@@ -673,26 +704,20 @@ public class Context extends LinkedHashMap<String, Object> {
 
         // 7)
         if (!relativeToVocab) {
-            return removeBase(iri);
+            return URL.removeBase(this.get("@base"), iri);
         }
 
         // 8)
         return iri;
     }
-
-    private String removeBase(String iri) {
-		try {
-			return ((new URI((String)this.get("@base"))).relativize(new URI(iri))).toString();
-		} catch (URISyntaxException e) {
-			// TODO: should this be the case
-			return iri;
-		}
-	}
+    
+    String compactIri(String iri, boolean relativeToVocab) {
+    	return compactIri(iri, null, relativeToVocab, false);
+    }
 
 	String compactIri(String iri) {
         return compactIri(iri, null, false, false);
     }
-
         
     @Override
     public Context clone() {
@@ -741,7 +766,7 @@ public class Context extends LinkedHashMap<String, Object> {
         for (final String term : terms) {
             final Map<String, Object> definition = (Map<String, Object>) termDefinitions.get(term);
             // 3.1)
-            if (termDefinitions.containsKey(term) && definition == null) {
+            if (definition == null) {
                 continue;
             }
 
@@ -767,6 +792,7 @@ public class Context extends LinkedHashMap<String, Object> {
             	typeLanguageMap = new LinkedHashMap<String,Object>();
             	typeLanguageMap.put("@language", new LinkedHashMap<String, Object>());
             	typeLanguageMap.put("@type", new LinkedHashMap<String, Object>());
+            	containerMap.put(container, typeLanguageMap);
             }
             
             // 3.8)
@@ -849,7 +875,7 @@ public class Context extends LinkedHashMap<String, Object> {
                     continue;
                 }
                 // 2.4.2
-                return (String) typeLanguageMap.get(item);
+                return (String) valueMap.get(item);
             }
         }
     	// 3)
@@ -869,22 +895,37 @@ public class Context extends LinkedHashMap<String, Object> {
 		if (JSONLDUtils.isKeyword(property)) {
 			return property;
 		}
-		Map<String,Object> termDefinition = (Map<String,Object>)termDefinitions.get(property);
-		if (termDefinition == null) {
+		Map<String,Object> td = (Map<String,Object>)termDefinitions.get(property);
+		if (td == null) {
 			return null;
 		}
-		return (String) termDefinition.get("@container");
+		return (String) td.get("@container");
 	}
 
 	public Boolean isReverseProperty(String property) {
-		Map<String,Object> termDefinition = (Map<String,Object>)termDefinitions.get(property);
-		if (termDefinition == null) {
+		Map<String,Object> td = (Map<String,Object>)termDefinitions.get(property);
+		if (td == null) {
 			return false;
 		}
-		Object reverse = termDefinition.get("@reverse");
+		Object reverse = td.get("@reverse");
 		return reverse != null && (Boolean)reverse;
 	}
 	
+	private String getTypeMapping(String property) {
+		Map<String,Object> td = (Map<String,Object>)termDefinitions.get(property);
+		if (td == null) {
+			return null;
+		}
+		return (String)td.get("@type");
+	}
+	
+	private String getLanguageMapping(String property) {
+		Map<String,Object> td = (Map<String,Object>)termDefinitions.get(property);
+		if (td == null) {
+			return null;
+		}
+		return (String)td.get("@language");
+	}
 	
 	Map<String, Object> getTermDefinition(String key) {
 		return ((Map<String,Object>)termDefinitions.get(key));

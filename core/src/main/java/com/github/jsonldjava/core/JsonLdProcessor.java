@@ -2,11 +2,11 @@ package com.github.jsonldjava.core;
 
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.github.jsonldjava.core.JsonLdError.Error;
-import com.github.jsonldjava.utils.JSONUtils;
 
 /** 
  * http://json-ld.org/spec/latest/json-ld-api/#the-jsonldprocessor-interface
@@ -16,14 +16,54 @@ import com.github.jsonldjava.utils.JSONUtils;
  */
 public class JsonLdProcessor {
 
-    public static List<Object> expand(Object input, Object context, JsonLdOptions opts) throws JsonLdError {
+	public static Map<String,Object> compact(Object input, Object context, JsonLdOptions opts) throws JsonLdError {
+		// 1)
+		// TODO: look into java futures/promises
+		
+		// 2-6) NOTE: these are all the same steps as in expand
+    	Object expanded = expand(input, opts);
+    	// 7)
+    	if (context instanceof Map && ((Map<String,Object>) context).containsKey("@context")) {
+    		context = ((Map<String,Object>) context).get("@context");
+    	}
+    	Context activeCtx = new Context(opts);
+    	activeCtx = activeCtx.parse(context);
+    	// 8)
+    	Object compacted = new JsonLdApi(opts).compact(activeCtx, null, expanded, opts.getCompactArrays());
+    	
+    	// final step of Compaction Algorithm
+    	// TODO: SPEC:  the result result is a NON EMPTY array, 
+    	if (compacted instanceof List) {
+    		if (((List<Object>) compacted).isEmpty()) {
+    			compacted = new LinkedHashMap<String, Object>();
+    		} else {
+    			Map<String,Object> tmp = new LinkedHashMap<String, Object>();
+    			// TODO: SPEC: doesn't specify to use vocab = true here
+    			tmp.put(activeCtx.compactIri("@graph", true), compacted);
+    			compacted = tmp;
+    		}
+    	}
+    	if (compacted != null && context != null) {
+    		// TODO: figure out if we can make "@context" appear at the start of the keySet
+    		if ((context instanceof Map && !((Map<String,Object>) context).isEmpty()) || (context instanceof List && !((List<Object>) context).isEmpty())) {
+    			((Map<String,Object>)compacted).put("@context", context);
+    		}
+    	}
+    	
+    	// 9)
+    	return (Map<String,Object>)compacted;    	
+	}
+	
+	public static List<Object> expand(Object input, JsonLdOptions opts) throws JsonLdError {
     	// 1) 
     	// TODO: look into java futures/promises
     	
     	// 2) TODO: better verification of DOMString IRI
     	if (input instanceof String && ((String)input).contains(":")) {
     		try {
-    			JSONUtils.fromURL(new URL((String)input));
+    			RemoteDocument tmp = opts.documentLoader.loadDocument((String)input);
+    			input = tmp.document;
+    			// TODO: figure out how to deal with remote context
     		} catch (Exception e) {
     			throw new JsonLdError(Error.LOADING_DOCUMENT_FAILED, e.getMessage());
     		}
@@ -37,11 +77,12 @@ public class JsonLdProcessor {
     	// 3)
     	Context activeCtx = new Context(opts);
     	// 4)
-    	if (context != null) {
-    		if (context instanceof Map && ((Map<String,Object>) context).containsKey("@context")) {
-    			context = ((Map<String,Object>) context).get("@context");
+    	if (opts.getExpandContext() != null) {
+    		Object exCtx = opts.getExpandContext();
+    		if (exCtx instanceof Map && ((Map<String,Object>) exCtx).containsKey("@context")) {
+    			exCtx = ((Map<String,Object>) exCtx).get("@context");
     		}
-    		activeCtx = activeCtx.parse(context);
+    		activeCtx = activeCtx.parse(exCtx);
     	}
     	
     	// 5)
@@ -66,13 +107,9 @@ public class JsonLdProcessor {
         }
         return (List<Object>) expanded;
     }
-
-    public static List<Object> expand(Object input, JsonLdOptions opts) throws JsonLdError {
-    	return expand(input, null, opts);
-    }
     
     public static List<Object> expand(Object input) throws JsonLdError {
-        return expand(input, null, new JsonLdOptions(""));
+        return expand(input, new JsonLdOptions(""));
     }
 
     
@@ -85,12 +122,6 @@ public class JsonLdProcessor {
     /////////////////// NOT IMPLEMENTED (just here for convenience)
 	public static Map<String, Object> frame(Map<String, Object> rval,
 			Map<String, Object> frame, JsonLdOptions jsonLdOptions) throws JsonLdError {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	public static Map<String, Object> compact(Map<String, Object> rval,
-			Object object, JsonLdOptions jsonLdOptions) throws JsonLdError {
 		// TODO Auto-generated method stub
 		return null;
 	}

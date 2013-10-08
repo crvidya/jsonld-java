@@ -5,6 +5,7 @@ import static com.github.jsonldjava.core.JSONLDUtils.isKeyword;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,11 +36,314 @@ public class JsonLdApi {
     }
 
     /**
+     * Compaction Algorithm
+     * 
+     * http://json-ld.org/spec/latest/json-ld-api/#compaction-algorithm
+     * 
+     * 
+     * @param activeCtx
+     * @param activeProperty
+     * @param element
+     * @param compactArrays
+     * @return
+     */
+    public Object compact(Context activeCtx, String activeProperty, Object element, boolean compactArrays) throws JsonLdError {
+    	// 2)
+    	if (element instanceof List) {
+    		// 2.1)
+    		final List<Object> result = new ArrayList<Object>();
+    		// 2.2)
+    		for (final Object item : (List<Object>) element) {
+    			// 2.2.1)
+    			final Object compactedItem = compact(activeCtx, activeProperty, item, compactArrays);
+    			// 2.2.2)
+    			if (compactedItem != null) {
+                    result.add(compactedItem);
+                }
+    		}
+    		// 2.3)
+    		if (compactArrays && result.size() == 1 && activeCtx.getContainer(activeProperty) == null) {
+    			return result.get(0);
+            }
+    		// 2.4)
+            return result;
+    	}
+    	
+    	// 3)
+        if (element instanceof Map) {
+            // access helper
+            final Map<String, Object> elem = (Map<String, Object>) element;
+
+            // 4
+            if (elem.containsKey("@value") || elem.containsKey("@id")) {
+                Object compactedValue = activeCtx.compactValue(activeProperty, elem);
+                if (!(compactedValue instanceof Map || compactedValue instanceof List)) {
+                	return compactedValue;
+                }
+            }
+            // 5)
+            final boolean insideReverse = ("@reverse".equals(activeProperty));
+
+            // 6)
+            final Map<String, Object> result = new LinkedHashMap<String, Object>();
+            // 7)
+            final List<String> keys = new ArrayList<String>(elem.keySet());
+            Collections.sort(keys);
+            for (final String expandedProperty : keys) {
+                final Object expandedValue = elem.get(expandedProperty);
+
+                // 7.1)
+                if ("@id".equals(expandedProperty) || "@type".equals(expandedProperty)) {
+                    Object compactedValue;
+
+                    // 7.1.1)
+                    if (expandedValue instanceof String) {
+                        compactedValue = activeCtx.compactIri((String)expandedValue, "@type".equals(expandedProperty));
+                    }
+                    // 7.1.2)
+                    else {
+                        final List<String> types = new ArrayList<String>();
+                        // 7.1.2.2)
+                        for (final String expandedType : (List<String>) expandedValue) {
+                            types.add(activeCtx.compactIri(expandedType, true));
+                        }
+                        // 7.1.2.3)
+                        if (types.size() == 1) {
+                        	compactedValue = types.get(0);
+                        } else {
+                        	compactedValue = types;
+                        }
+                    }
+
+                    // 7.1.3)
+                    final String alias = activeCtx.compactIri(expandedProperty, true);
+                    // 7.1.4)
+                    result.put(alias, compactedValue);
+                    continue;
+                    // TODO: old add value code, see if it's still relevant?
+                    //addValue(rval, alias, compactedValue, isArray(compactedValue)
+                    //        && ((List<Object>) expandedValue).size() == 0);
+                }
+
+                // 7.2)
+                if ("@reverse".equals(expandedProperty)) {
+                    // 7.2.1)
+                    final Map<String, Object> compactedValue = (Map<String, Object>) compact(
+                            activeCtx, "@reverse", expandedValue, compactArrays);
+
+                    // 7.2.2)
+                    for (final String property : compactedValue.keySet()) {
+                    	Object value = compactedValue.get(property);
+                    	// 7.2.2.1)
+                    	if (activeCtx.isReverseProperty(property)) {
+                    		// 7.2.2.1.1)
+                            if (("@set".equals(activeCtx.getContainer(property)) || !compactArrays) && !(value instanceof List)) {
+                            	List<Object> tmp = new ArrayList<Object>();
+                            	tmp.add(value);
+                                result.put(property, tmp);
+                            }
+                            // 7.2.2.1.2)
+                            if (!result.containsKey(property)) {
+                            	result.put(property, value);
+                            }
+                            // 7.2.2.1.3)
+                            else {
+                            	if (!(result.get(property) instanceof List)) {
+                            		List<Object> tmp = new ArrayList<Object>();
+                            		tmp.add(result.put(property, tmp));
+                            	}
+                            	if (value instanceof List) {
+                            		((List<Object>)result.get(property)).addAll((List<Object>)value);
+                            	} else {
+                            		((List<Object>)result.get(property)).add(value);
+                            	}
+                            }
+                            // 7.2.2.1.4) TODO: this doesn't seem safe (i.e. modifying the map being used to drive the loop)!
+                            compactedValue.remove(property);
+                        }
+                    }
+                    // 7.2.3)
+                    if (!compactedValue.isEmpty()) {
+                    	// 7.2.3.1)
+                        final String alias = activeCtx.compactIri("@reverse", true);
+                        // 7.2.3.2)
+                        result.put(alias, compactedValue);
+                    }
+                    // 7.2.4)
+                    continue;
+                }
+
+                // 7.3)
+                if ("@index".equals(expandedProperty) && "@index".equals(activeCtx.getContainer(activeProperty))) {
+                    continue;
+                }
+                // 7.4)
+                else if ("@index".equals(expandedProperty) || "@value".equals(expandedProperty) || "@language".equals(expandedProperty)) {
+                	// 7.4.1)
+                    final String alias = activeCtx.compactIri(expandedProperty, true);
+                    // 7.4.2)
+                    result.put(alias, expandedValue);
+                    continue;
+                }
+
+                // NOTE: expanded value must be an array due to expansion
+                // algorithm.
+                
+                // 7.5)
+                if (((List<Object>) expandedValue).size() == 0) {
+                	// 7.5.1)
+                	String itemActiveProperty = activeCtx.compactIri(expandedProperty, expandedValue, true, insideReverse);
+                	// 7.5.2)
+                	if (!result.containsKey(itemActiveProperty)) {
+                		result.put(itemActiveProperty, new ArrayList<Object>());
+                	} else {
+                		Object value = result.get(itemActiveProperty);
+                		if (!(value instanceof List)) {
+                			List<Object> tmp = new ArrayList<Object>();
+                			tmp.add(value);
+                			result.put(itemActiveProperty, tmp);
+                		}
+                	}
+                }
+
+                // 7.6)
+                for (final Object expandedItem : (List<Object>) expandedValue) {
+                    // 7.6.1)
+                    final String itemActiveProperty = activeCtx.compactIri(expandedProperty,
+                            expandedItem, true, insideReverse);
+                    // 7.6.2)
+                    final String container = activeCtx.getContainer(itemActiveProperty);
+
+                    // get @list value if appropriate
+                    final boolean isList = (expandedItem instanceof Map && ((Map<String,Object>) expandedItem).containsKey("@list"));
+                    Object list = null;
+                    if (isList) {
+                        list = ((Map<String, Object>) expandedItem).get("@list");
+                    }
+
+                    // 7.6.3)
+                    Object compactedItem = compact(activeCtx, itemActiveProperty, isList ? list
+                            : expandedItem, compactArrays);
+
+                    // 7.6.4)
+                    if (isList) {
+                        // 7.6.4.1)
+                        if (!(compactedItem instanceof List)) {
+                            final List<Object> tmp = new ArrayList<Object>();
+                            tmp.add(compactedItem);
+                            compactedItem = tmp;
+                        }
+                        // 7.6.4.2)
+                        if (!"@list".equals(container)) {
+                            // 7.6.4.2.1)
+                            final Map<String, Object> wrapper = new LinkedHashMap<String, Object>();
+                            // TODO: SPEC: no mention of vocab = true
+                            wrapper.put(activeCtx.compactIri("@list", true), compactedItem);
+                            compactedItem = wrapper;
+
+                            //  7.6.4.2.2)
+                            if (((Map<String, Object>) expandedItem).containsKey("@index")) {
+                                ((Map<String, Object>) compactedItem).put(
+                                		// TODO: SPEC: no mention of vocab = true
+                                        activeCtx.compactIri("@index", true),
+                                        ((Map<String, Object>) expandedItem).get("@index"));
+                            }
+                        }
+                        // 7.6.4.3)
+                        else if (result.containsKey(itemActiveProperty)) {
+                            throw new JsonLdError(
+                            		Error.COMPACTION_TO_LIST_OF_LISTS,
+                            		"There cannot be two list objects associated with an active property that has a container mapping"
+                                    );
+                        }
+                    }
+
+                    // 7.6.5)
+                    if ("@language".equals(container) || "@index".equals(container)) {
+                        // 7.6.5.1)
+                        Map<String, Object> mapObject;
+                        if (result.containsKey(itemActiveProperty)) {
+                            mapObject = (Map<String, Object>) result.get(itemActiveProperty);
+                        } else {
+                            mapObject = new LinkedHashMap<String, Object>();
+                            result.put(itemActiveProperty, mapObject);
+                        }
+
+                        // 7.6.5.2)
+                        if ("@language".equals(container) && (compactedItem instanceof Map && ((Map<String,Object>) compactedItem).containsKey("@value"))) {
+                            compactedItem = ((Map<String, Object>) compactedItem).get("@value");
+                        }
+
+                        // 7.6.5.3)
+                        String mapKey = (String) ((Map<String,Object>) expandedItem).get(container);
+                        // 7.6.5.4)
+                        if (!mapObject.containsKey(mapKey)) {
+                        	mapObject.put(mapKey, compactedItem);
+                        } else {
+                        	List<Object> tmp;
+                        	if (!(mapObject.get(mapKey) instanceof List)) {
+                        		tmp = new ArrayList<Object>();
+                            	tmp.add(mapObject.put(mapKey, tmp));
+                        	} else {
+                        		tmp = (List<Object>) mapObject.get(mapKey);
+                        	}
+                        	tmp.add(compactedItem);
+                        }
+                    }
+                    // 7.6.6)
+                    else {
+                        // 7.6.6.1)
+                        final Boolean check = (!compactArrays
+                                || "@set".equals(container)
+                                || "@list".equals(container)
+                                || "@list".equals(expandedProperty) 
+                                || "@graph".equals(expandedProperty))
+                                && (!(compactedItem instanceof List));
+                        if (check) {
+                        	List<Object> tmp = new ArrayList<Object>();
+                        	tmp.add(compactedItem);
+                        	compactedItem = tmp;
+                        }
+                        // 7.6.6.2)
+                        if (!result.containsKey(itemActiveProperty)) {
+                        	result.put(itemActiveProperty, compactedItem);
+                        } else {
+                        	if (!(result.get(itemActiveProperty) instanceof List)) {
+                        		List<Object> tmp = new ArrayList<Object>();
+                        		tmp.add(result.put(itemActiveProperty, tmp));
+                        	}
+                        	if (compactedItem instanceof List) {
+                        		((List<Object>)result.get(itemActiveProperty)).addAll((List<Object>)compactedItem);
+                        	} else {
+                        		((List<Object>)result.get(itemActiveProperty)).add(compactedItem);
+                        	}
+                        }
+                        
+                    }
+                }
+            }
+            // 8)
+            return result;
+        }
+
+        // 2)
+        return element;
+    }
+    
+    public Object compact(Context activeCtx, String activeProperty, Object element) throws JsonLdError {
+    	return compact(activeCtx, activeProperty, element, true);
+    }
+    
+    /**
      * Expansion Algorithm
      * 
      * http://json-ld.org/spec/latest/json-ld-api/#expansion-algorithm
      * 
-     * @return the expanded value.
+     * @param activeCtx
+     * @param activeProperty
+     * @param element
+     * @return
+     * @throws JsonLdError
      */
     public Object expand(Context activeCtx, String activeProperty, Object element) throws JsonLdError {
         // 1)

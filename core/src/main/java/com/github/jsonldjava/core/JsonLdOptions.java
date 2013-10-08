@@ -64,4 +64,5 @@ public class JsonLdOptions {
 	public String format = null;
 	public Boolean useNamespaces = false;
 	public String outputForm = null;
+	public DocumentLoader documentLoader;
 }

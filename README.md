@@ -87,10 +87,10 @@ CHANGELOG
 
 * Matched class names to Spec
  - Renamed `JSONLDException` to `JsonLdError`
- - Renamed `JSONLDProcessor to `JsonLdApi`
- - Renamed `JSONLD to `JsonLdProcessor`
- - Renamed `ActiveContext to `Context`
- - Renamed `Options to `JsonLdOptions`
+ - Renamed `JSONLDProcessor` to `JsonLdApi`
+ - Renamed `JSONLD` to `JsonLdProcessor`
+ - Renamed `ActiveContext` to `Context`
+ - Renamed `Options` to `JsonLdOptions`
 * All context related utility functions moved to be members of the `Context` class
 
 ### 02.09.2013
@@ -144,4 +144,4 @@ Considerations for 1.0 release / optimisations
 =========
 
 * The `Context` class is a `Map` and many of the options are stored as values of the map. These could be made into variables, whice should speed things up a bit (the same with the termDefinitions variable inside the Context).
-
+* some sort of document loader interface (with a mockup for testing) is required
