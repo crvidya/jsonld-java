@@ -15,17 +15,49 @@ public class JsonLdOptions {
         this.setBase(base);
     }
 
-    private String base = null;
-    private Boolean compactArrays = true;
-    
-    private Object expandContext = null;
-    private String processingMode = "json-ld-1.0";
-
     @Override
     public JsonLdOptions clone() {
         final JsonLdOptions rval = new JsonLdOptions(getBase());
         return rval;
     }
+    
+    // base options
+    
+    private String base = null;
+    private Boolean compactArrays = true;
+    private Object expandContext = null;
+    private String processingMode = "json-ld-1.0";
+    
+    // frame options
+    
+    private Boolean embed = null;
+    private Boolean explicit = null;
+    private Boolean omitDefault = null;
+    
+ 
+    public Boolean getEmbed() {
+		return embed;
+	}
+
+	public void setEmbed(Boolean embed) {
+		this.embed = embed;
+	}
+
+	public Boolean getExplicit() {
+		return explicit;
+	}
+
+	public void setExplicit(Boolean explicit) {
+		this.explicit = explicit;
+	}
+
+	public Boolean getOmitDefault() {
+		return omitDefault;
+	}
+
+	public void setOmitDefault(Boolean omitDefault) {
+		this.omitDefault = omitDefault;
+	}
 
 	public Boolean getCompactArrays() {
 		return compactArrays;

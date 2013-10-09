@@ -192,11 +192,31 @@ public class JsonLdProcessor {
     	return flatten(input, null, opts);
     }
     
-    /////////////////// NOT IMPLEMENTED (just here for convenience)
-	public static Map<String, Object> frame(Map<String, Object> rval,
-			Map<String, Object> frame, JsonLdOptions jsonLdOptions) throws JsonLdError {
-		// TODO Auto-generated method stub
-		return null;
+	public static Map<String, Object> frame(Object input, Object frame, JsonLdOptions options) throws JsonLdError {
+		
+		if (frame instanceof Map) {
+			frame = JsonLdUtils.clone(frame);
+		}
+		// TODO string/IO input
+		
+		Object expandedInput = expand(input, options); 
+		List<Object> expandedFrame = expand(frame, options);
+		
+		JsonLdApi api = new JsonLdApi(expandedInput, options);
+		List<Object> framed = api.frame(expandedInput, expandedFrame);
+		Context activeCtx = api.context.parse(((Map<String,Object>) frame).get("@context"));
+		
+		Object compacted = api.compact(activeCtx, null, framed);
+		if (!(compacted instanceof List)) {
+			List<Object> tmp = new ArrayList<Object>();
+			tmp.add(compacted);
+			compacted = tmp;
+		}
+		String alias = activeCtx.compactIri("@graph");
+		Map<String,Object> rval = activeCtx.serialize();
+		rval.put(alias, compacted);
+		JsonLdUtils.removePreserve(activeCtx, rval, options);
+		return rval;
 	}
 
 	public static Map<String, Object> fromRDF(String manifestFile,

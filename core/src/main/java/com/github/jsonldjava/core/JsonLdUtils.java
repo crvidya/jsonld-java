@@ -145,6 +145,43 @@ public class JsonLdUtils {
 		return value.contains(":");
 	}
     
+    /**
+     * Returns true if the given value is a subject with properties.
+     * 
+     * @param v
+     *            the value to check.
+     * 
+     * @return true if the value is a subject with properties, false if not.
+     */
+    static boolean isNode(Object v) {
+        // Note: A value is a subject if all of these hold true:
+        // 1. It is an Object.
+        // 2. It is not a @value, @set, or @list.
+        // 3. It has more than 1 key OR any existing key is not @id.
+        if (v instanceof Map
+                && !(((Map) v).containsKey("@value") || ((Map) v).containsKey("@set") || ((Map) v)
+                        .containsKey("@list"))) {
+            return ((Map<String, Object>) v).size() > 1 || !((Map) v).containsKey("@id");
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the given value is a subject reference.
+     * 
+     * @param v
+     *            the value to check.
+     * 
+     * @return true if the value is a subject reference, false if not.
+     */
+    static boolean isNodeReference(Object v) {
+        // Note: A value is a subject reference if all of these hold true:
+        // 1. It is an Object.
+        // 2. It has a single key: @id.
+        return (v instanceof Map && ((Map<String, Object>) v).size() == 1 && ((Map<String, Object>) v)
+                .containsKey("@id"));
+    }
+    
 	////////////////////////////////////////////////////// OLD CODE BELOW
     
     /**
@@ -503,7 +540,7 @@ public class JsonLdUtils {
             // recurse through properties
             for (final String prop : ((Map<String, Object>) input).keySet()) {
                 Object result = removePreserve(ctx, ((Map<String, Object>) input).get(prop), opts);
-                final String container = (String) ctx.getContextValue(prop, "@container");
+                final String container = ctx.getContainer(prop);
                 if (opts.getCompactArrays() && isArray(result) && ((List<Object>) result).size() == 1
                         && container == null) {
                     result = ((List<Object>) result).get(0);
@@ -567,202 +604,6 @@ public class JsonLdUtils {
             return 1;
         }
         return Integer.signum(a.compareTo(b));
-    }
-
-    /**
-     * Recursively flattens the subjects in the given JSON-LD expanded input
-     * into a node map.
-     * 
-     * @param input
-     *            the JSON-LD expanded input.
-     * @param graphs
-     *            a map of graph name to subject map.
-     * @param graph
-     *            the name of the current graph.
-     * @param namer
-     *            the blank node namer.
-     * @param name
-     *            the name assigned to the current input if it is a bnode.
-     * @param list
-     *            the list to append to, null for none.
-     * @throws JsonLdError
-     */
-    static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer, String name, List<Object> list) throws JsonLdError {
-        // recurce through array
-        if (isArray(input)) {
-            for (final Object i : (List<Object>) input) {
-                createNodeMap(i, graphs, graph, namer, null, list);
-            }
-            return;
-        }
-
-        // add non-object to list
-        if (!isObject(input)) {
-            if (list != null) {
-                list.add(input);
-            }
-            return;
-        }
-
-        // add value to list
-        if (isValue(input)) {
-            if (((Map<String, Object>) input).containsKey("@type")) {
-                String type = (String) ((Map<String, Object>) input).get("@type");
-                // rename @type blank node
-                if (type.indexOf("_:") == 0) {
-                    type = namer.getName(type);
-                    ((Map<String, Object>) input).put("@type", type);
-                }
-                if (!((Map<String, Object>) graphs.get(graph)).containsKey(type)) {
-                    final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-                    tmp.put("@id", type);
-                    ((Map<String, Object>) graphs.get(graph)).put(type, tmp);
-                }
-            }
-            if (list != null) {
-                list.add(input);
-            }
-            return;
-        }
-
-        // NOTE: At this point, input must be a subject.
-
-        // get name for subject
-        if (name == null) {
-            name = isBlankNode(input) ? namer.getName((String) ((Map<String, Object>) input)
-                    .get("@id")) : (String) ((Map<String, Object>) input).get("@id");
-        }
-
-        // add subject reference to list
-        if (list != null) {
-            final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", name);
-            list.add(tmp);
-        }
-
-        // create new subject or merge into existing one
-        final Map<String, Object> subjects = (Map<String, Object>) graphs.get(graph);
-        Map<String, Object> subject;
-        if (subjects.containsKey(name)) {
-            subject = (Map<String, Object>) subjects.get(name);
-        } else {
-            subject = new LinkedHashMap<String, Object>();
-            subjects.put(name, subject);
-        }
-        subject.put("@id", name);
-        final List<String> properties = new ArrayList<String>(
-                ((Map<String, Object>) input).keySet());
-        Collections.sort(properties);
-        for (String property : properties) {
-            // skip @id
-            if ("@id".equals(property)) {
-                continue;
-            }
-
-            // handle reverse properties
-            if ("@reverse".equals(property)) {
-                final Map<String, Object> referencedNode = new LinkedHashMap<String, Object>();
-                referencedNode.put("@id", name);
-                final Map<String, Object> reverseMap = (Map<String, Object>) ((Map<String, Object>) input)
-                        .get("@reverse");
-                for (final String reverseProperty : reverseMap.keySet()) {
-                    for (final Object item : (List<Object>) reverseMap.get(reverseProperty)) {
-                        addValue((Map<String, Object>) item, reverseProperty, referencedNode, true,
-                                false);
-                        createNodeMap(item, graphs, graph, namer);
-                    }
-                }
-                continue;
-            }
-
-            // recurse into graph
-            if ("@graph".equals(property)) {
-                // add graph subjects map entry
-                if (!graphs.containsKey(name)) {
-                    graphs.put(name, new LinkedHashMap<String, Object>());
-                }
-                final String g = "@merged".equals(graph) ? graph : name;
-                createNodeMap(((Map<String, Object>) input).get(property), graphs, g, namer);
-                continue;
-            }
-
-            // copy non-@type keywords
-            if (!"@type".equals(property) && isKeyword(property)) {
-                if ("@index".equals(property) && subjects.containsKey("@index")) {
-                    throw new JsonLdError(
-                            "Invalid JSON-LD syntax; conflicting @index property detected.")
-                            .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("subject",
-                                    subject);
-                }
-                subject.put(property, ((Map<String, Object>) input).get(property));
-                continue;
-            }
-
-            // iterate over objects
-            final List<Object> objects = (List<Object>) ((Map<String, Object>) input).get(property);
-
-            // if property is a bnode, assign it a new id
-            if (property.indexOf("_:") == 0) {
-                property = namer.getName(property);
-            }
-
-            // ensure property is added for empty arrays
-            if (objects.size() == 0) {
-                addValue(subject, property, new ArrayList<Object>(), true);
-                continue;
-            }
-
-            for (Object o : objects) {
-                if ("@type".equals(property)) {
-                    // rename @type blank nodes
-                    o = (((String) o).indexOf("_:") == 0) ? namer.getName((String) o) : o;
-                    if (!((Map<String, Object>) graphs.get(graph)).containsKey(o)) {
-                        final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-                        tmp.put("@id", o);
-                        ((Map<String, Object>) graphs.get(graph)).put((String) o, tmp);
-                    }
-                }
-
-                // handle embedded subject or subject reference
-                if (isSubject(o) || isSubjectReference(o)) {
-                    // rename blank node @id
-                    final String id = isBlankNode(o) ? namer
-                            .getName((String) ((Map<String, Object>) o).get("@id"))
-                            : (String) ((Map<String, Object>) o).get("@id");
-
-                    // add reference and recurse
-                    final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-                    tmp.put("@id", id);
-                    addValue(subject, property, tmp, true, false);
-                    createNodeMap(o, graphs, graph, namer, id);
-                }
-                // handle @list
-                else if (isList(o)) {
-                    final List<Object> _list = new ArrayList<Object>();
-                    createNodeMap(((Map<String, Object>) o).get("@list"), graphs, graph, namer,
-                            name, _list);
-                    o = new LinkedHashMap<String, Object>();
-                    ((Map<String, Object>) o).put("@list", _list);
-                    addValue(subject, property, o, true, false);
-                }
-                // handle @value
-                else {
-                    createNodeMap(o, graphs, graph, namer, name);
-                    addValue(subject, property, o, true, false);
-                }
-            }
-        }
-    }
-
-    static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer, String name) throws JsonLdError {
-        createNodeMap(input, graphs, graph, namer, name, null);
-    }
-
-    static void createNodeMap(Object input, Map<String, Object> graphs, String graph,
-            UniqueNamer namer) throws JsonLdError {
-        createNodeMap(input, graphs, graph, namer, null, null);
     }
 
     /**
@@ -915,43 +756,6 @@ public class JsonLdUtils {
             }
         }
         return false;
-    }
-
-    /**
-     * Returns true if the given value is a subject with properties.
-     * 
-     * @param v
-     *            the value to check.
-     * 
-     * @return true if the value is a subject with properties, false if not.
-     */
-    static boolean isSubject(Object v) {
-        // Note: A value is a subject if all of these hold true:
-        // 1. It is an Object.
-        // 2. It is not a @value, @set, or @list.
-        // 3. It has more than 1 key OR any existing key is not @id.
-        if (v instanceof Map
-                && !(((Map) v).containsKey("@value") || ((Map) v).containsKey("@set") || ((Map) v)
-                        .containsKey("@list"))) {
-            return ((Map<String, Object>) v).size() > 1 || !((Map) v).containsKey("@id");
-        }
-        return false;
-    }
-
-    /**
-     * Returns true if the given value is a subject reference.
-     * 
-     * @param v
-     *            the value to check.
-     * 
-     * @return true if the value is a subject reference, false if not.
-     */
-    static boolean isSubjectReference(Object v) {
-        // Note: A value is a subject reference if all of these hold true:
-        // 1. It is an Object.
-        // 2. It has a single key: @id.
-        return (v instanceof Map && ((Map<String, Object>) v).size() == 1 && ((Map<String, Object>) v)
-                .containsKey("@id"));
     }
 
     /**

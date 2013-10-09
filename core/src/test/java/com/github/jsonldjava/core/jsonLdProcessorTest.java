@@ -242,7 +242,8 @@ public class jsonLdProcessorTest {
                 (testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name")))
                 || testType.contains("jld:CompactTest")
                 || (testType.contains("jld:FlattenTest") && !"Error handling".equals(manifest.get("name")))
-                      //  || testType.contains("jld:FrameTest") || testType.contains("jld:ToRDFTest")
+                || testType.contains("jld:FrameTest") 
+                //|| testType.contains("jld:ToRDFTest")
                       //  || testType.contains("jld:NormalizeTest")
                       //  || testType.contains("jld:FromRDFTest")
                 ) {
@@ -407,6 +408,12 @@ public class jsonLdProcessorTest {
                 } else {
                     result = JsonLdProcessor.flatten(input, options);
                 }
+            } else if (testType.contains("jld:FrameTest")) {
+                final InputStream frameStream = cl.getResourceAsStream(TEST_DIR + "/"
+                        + test.get("frame"));
+                final Map<String, Object> frameJson = (Map<String, Object>) JSONUtils
+                        .fromInputStream(frameStream);
+                result = JsonLdProcessor.frame(input, frameJson, options);
             } 
             /*
             if (testType.contains("jld:NormalizeTest")) {

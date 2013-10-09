@@ -1015,7 +1015,9 @@ public class Context extends LinkedHashMap<String, Object> {
 		}
 		
 		Map<String,Object> rval = new LinkedHashMap<String, Object>();
-		rval.put("@context", ctx);
+		if (!(ctx == null || ctx.isEmpty())) {
+			rval.put("@context", ctx);
+		}
 		return rval;
 	}
 	
