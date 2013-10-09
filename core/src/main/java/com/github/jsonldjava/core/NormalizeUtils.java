@@ -502,7 +502,7 @@ class NormalizeUtils {
         private final Map<String, Boolean> left;
 
         public Permutator(List<String> list) {
-            this.list = (List<String>) JSONLDUtils.clone(list);
+            this.list = (List<String>) JsonLdUtils.clone(list);
             Collections.sort(this.list);
             this.done = false;
             this.left = new LinkedHashMap<String, Boolean>();
@@ -527,7 +527,7 @@ class NormalizeUtils {
          * @return the next permutation.
          */
         public List<String> next() {
-            final List<String> rval = (List<String>) JSONLDUtils.clone(this.list);
+            final List<String> rval = (List<String>) JsonLdUtils.clone(this.list);
 
             // Calculate the next permutation using Steinhaus-Johnson-Trotter
             // permutation algoritm

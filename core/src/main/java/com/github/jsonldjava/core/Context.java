@@ -1,6 +1,6 @@
 package com.github.jsonldjava.core;
 
-import static com.github.jsonldjava.core.JSONLDUtils.compareShortestLeast;
+import static com.github.jsonldjava.core.JsonLdUtils.compareShortestLeast;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -181,11 +181,11 @@ public class Context extends LinkedHashMap<String, Object> {
     			String value = (String)((Map<String,Object>) context).get("@base");
     			if (value == null) {
     				result.remove("@base");
-    			} else if (JSONLDUtils.isAbsoluteIri(value)) {
+    			} else if (JsonLdUtils.isAbsoluteIri(value)) {
     				result.put("@base", value);
     			} else {
     				String baseUri = (String)result.get("@base");
-    				if (!JSONLDUtils.isAbsoluteIri(baseUri)) {
+    				if (!JsonLdUtils.isAbsoluteIri(baseUri)) {
     					throw new JsonLdError(Error.INVALID_BASE_IRI, baseUri);
     				}
     				result.put("@base", URL.resolve(baseUri, value));
@@ -197,7 +197,7 @@ public class Context extends LinkedHashMap<String, Object> {
     			String value = (String)((Map<String,Object>) context).get("@vocab");
     			if (value == null) {
     				result.remove("@vocab");
-    			} else if (JSONLDUtils.isAbsoluteIri(value)) {
+    			} else if (JsonLdUtils.isAbsoluteIri(value)) {
     				result.put("@vocab", value);
     			} else {
     				throw new JsonLdError(Error.INVALID_VOCAB_MAPPING, value);
@@ -254,7 +254,7 @@ public class Context extends LinkedHashMap<String, Object> {
 		
 		defined.put(term, false);
 		
-		if (JSONLDUtils.isKeyword(term)) {
+		if (JsonLdUtils.isKeyword(term)) {
             throw new JsonLdError(Error.KEYWORD_REDEFINITION, term);
 		}
 		
@@ -296,7 +296,7 @@ public class Context extends LinkedHashMap<String, Object> {
         		}
         		throw new JsonLdError(Error.INVALID_TYPE_MAPPING, type);
         	}
-        	if ("@id".equals(type) || "@vocab".equals(type) || JSONLDUtils.isAbsoluteIri(type)) {
+        	if ("@id".equals(type) || "@vocab".equals(type) || JsonLdUtils.isAbsoluteIri(type)) {
         		definition.put("@type", type);
         	} else {
         		throw new JsonLdError(Error.INVALID_TYPE_MAPPING, type);
@@ -312,7 +312,7 @@ public class Context extends LinkedHashMap<String, Object> {
         		throw new JsonLdError(Error.INVALID_IRI_MAPPING, "Expected String for @reverse value. got " + (val.get("@reverse") == null ? "null" : val.get("@reverse").getClass()));
         	}
         	final String reverse = this.expandIri((String) val.get("@reverse"), false, true, context, defined);
-        	if (!JSONLDUtils.isAbsoluteIri(reverse)) {
+        	if (!JsonLdUtils.isAbsoluteIri(reverse)) {
         		throw new JsonLdError(Error.INVALID_IRI_MAPPING, "Non-absolute @reverse IRI: " + reverse);
         	}
             definition.put("@id", reverse);
@@ -340,7 +340,7 @@ public class Context extends LinkedHashMap<String, Object> {
             }
              
             String res = this.expandIri((String)val.get("@id"), false, true, context, defined);
-            if (JSONLDUtils.isKeyword(res) || JSONLDUtils.isAbsoluteIri(res)) {
+            if (JsonLdUtils.isKeyword(res) || JsonLdUtils.isAbsoluteIri(res)) {
             	if ("@context".equals(res)) {
             		throw new JsonLdError(Error.INVALID_KEYWORD_ALIAS, "cannot alias @context");
             	}
@@ -411,7 +411,7 @@ public class Context extends LinkedHashMap<String, Object> {
     String expandIri(String value, boolean relative, boolean vocab,
 			Map<String, Object> context, Map<String, Boolean> defined) throws JsonLdError {
     	// 1)
-    	if (value == null || JSONLDUtils.isKeyword(value)) {
+    	if (value == null || JsonLdUtils.isKeyword(value)) {
     		return value;
     	}
     	// 2)
@@ -533,7 +533,7 @@ public class Context extends LinkedHashMap<String, Object> {
                     String itemLanguage = "@none";
                     String itemType = "@none";
                     // 2.6.4.2)
-                    if (JSONLDUtils.isValue(item)) {
+                    if (JsonLdUtils.isValue(item)) {
                     	// 2.6.4.2.1)
                         if (((Map<String, Object>) item).containsKey("@language")) {
                             itemLanguage = (String) ((Map<String, Object>) item).get("@language");
@@ -556,7 +556,7 @@ public class Context extends LinkedHashMap<String, Object> {
                         commonLanguage = itemLanguage;
                     } 
                     // 2.6.4.5)
-                    else if (!commonLanguage.equals(itemLanguage) && JSONLDUtils.isValue(item)) {
+                    else if (!commonLanguage.equals(itemLanguage) && JsonLdUtils.isValue(item)) {
                         commonLanguage = "@none";
                     }
                     // 2.6.4.6)
@@ -892,7 +892,7 @@ public class Context extends LinkedHashMap<String, Object> {
 		if ("@graph".equals(property)) {
 			return "@set";
 		}
-		if (JSONLDUtils.isKeyword(property)) {
+		if (JsonLdUtils.isKeyword(property)) {
 			return property;
 		}
 		Map<String,Object> td = (Map<String,Object>)termDefinitions.get(property);
@@ -971,6 +971,52 @@ public class Context extends LinkedHashMap<String, Object> {
 
 	public Object getContextValue(String activeProperty, String string) throws JsonLdError {
 		throw new JsonLdError(Error.NOT_IMPLEMENTED, "getContextValue is only used by old code so far and thus isn't implemented");
+	}
+
+	public Map<String, Object> serialize() {
+		Map<String,Object> ctx = new LinkedHashMap<String, Object>();
+		if (this.get("@base") != null && !this.get("@base").equals(options.getBase())) {
+			ctx.put("@base", this.get("@base"));
+		}
+		if (this.get("@language") != null) {
+			ctx.put("@language", this.get("@language"));
+		}
+		if (this.get("@vocab") != null) {
+			ctx.put("@vocab", this.get("@vocab"));
+		}
+		for (String term : termDefinitions.keySet()) {
+			Map<String,Object> definition = (Map<String, Object>) termDefinitions.get(term);
+			if (definition.get("@language") == null &&
+				definition.get("@container") == null &&
+				definition.get("@type") == null &&
+				(definition.get("@reverse") == null || Boolean.FALSE.equals(definition.get("@reverse")))) {
+				String cid = this.compactIri((String) definition.get("@id"));
+				ctx.put(term, term.equals(cid) ? definition.get("@id") : cid);
+			} else {
+				Map<String,Object> defn = new LinkedHashMap<String, Object>();
+				String cid = this.compactIri((String) definition.get("@id"));
+				Boolean reverseProperty = Boolean.TRUE.equals(definition.get("@reverse"));
+				if (!(term.equals(cid) && !reverseProperty)) {
+					defn.put(reverseProperty ? "@reverse" : "@id", cid);
+				}
+				String typeMapping = (String) definition.get("@type");
+				if (typeMapping != null) {
+					defn.put("@type", JsonLdUtils.isKeyword(typeMapping) ? typeMapping : compactIri(typeMapping, true));
+				}
+				if (definition.get("@container") != null) {
+					defn.put("@container", definition.get("@container"));
+				}
+				Object lang = definition.get("@language");
+				if (definition.get("@language") != null) {
+					defn.put("@language", Boolean.FALSE.equals(lang) ? null : lang);
+				}
+				ctx.put(term, defn);
+			}
+		}
+		
+		Map<String,Object> rval = new LinkedHashMap<String, Object>();
+		rval.put("@context", ctx);
+		return rval;
 	}
 	
 	

@@ -241,7 +241,7 @@ public class jsonLdProcessorTest {
                 if (
                 (testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name")))
                 || testType.contains("jld:CompactTest")
-                      //  || testType.contains("jld:FlattenTest")
+                || (testType.contains("jld:FlattenTest") && !"Error handling".equals(manifest.get("name")))
                       //  || testType.contains("jld:FrameTest") || testType.contains("jld:ToRDFTest")
                       //  || testType.contains("jld:NormalizeTest")
                       //  || testType.contains("jld:FromRDFTest")
@@ -398,7 +398,16 @@ public class jsonLdProcessorTest {
                         + test.get("context"));
                 final Object contextJson = JSONUtils.fromInputStream(contextStream);
                 result = JsonLdProcessor.compact(input, contextJson, options);
-        	}
+        	} else if (testType.contains("jld:FlattenTest")) {
+                if (test.containsKey("context")) {
+                    final InputStream contextStream = cl.getResourceAsStream(TEST_DIR + "/"
+                            + test.get("context"));
+                    final Object contextJson = JSONUtils.fromInputStream(contextStream);
+                    result = JsonLdProcessor.flatten(input, contextJson, options);
+                } else {
+                    result = JsonLdProcessor.flatten(input, options);
+                }
+            } 
             /*
             if (testType.contains("jld:NormalizeTest")) {
                 options.format = "application/nquads";
@@ -447,7 +456,7 @@ public class jsonLdProcessorTest {
         try {
             // TODO: for tests that are supposed to fail, a more detailed check
             // that it failed in the right way is needed
-            testpassed = unorderedEquals(expect, result) || failure_expected;
+            testpassed = JsonLdUtils.deepCompare(expect, result) || failure_expected;
         } catch (final Exception e) {
             e.printStackTrace();
         }
@@ -508,101 +517,5 @@ public class jsonLdProcessorTest {
                         + JSONUtils.toPrettyString(expect) + "\nresult: " + (result instanceof JsonLdError ? ((JsonLdError)result).toString() : JSONUtils.toPrettyString(result)),
                 testpassed);
     }
-
-    /**
-     * compares the expected and resulting objects and prints out differences of
-     * the two
-     * 
-     * @param parent
-     * @param expect
-     * @param result
-     */
-    private void jsonDiff(String parent, Object expect, Object result) {
-        if (expect == null) {
-            if (result != null) {
-                System.out.println(parent + " expected null, got: " + result);
-            }
-        } else if (expect instanceof Map && result instanceof Map) { 
-            final Map<String, Object> e = (Map<String, Object>) expect;
-            final Map<String, Object> r = (Map<String, Object>) JSONLDUtils.clone(result);
-            for (final String k : e.keySet()) {
-                if (r.containsKey(k)) {
-                    jsonDiff(parent + "/" + k, e.get(k), r.remove(k));
-                } else {
-                    System.out.println(parent + " result missing key: " + k);
-                }
-            }
-            for (final String k : r.keySet()) {
-                System.out.println(parent + " result has extra key: " + k);
-            }
-        }
-        // List diffs are hard if we aren't strict with array ordering!
-        else if (expect instanceof List && result instanceof List) {
-            final List<Object> e = (List<Object>) expect;
-            final List<Object> r = (List<Object>) JSONLDUtils.clone(result);
-            if (e.size() != r.size()) {
-                System.out.println(parent + " results are not the same size");
-            }
-            int i = 0;
-            for (final Object o : e) {
-                final int j = r.indexOf(o);
-                if (j < 0) {
-                    System.out.println(parent + " result missing value at index: " + i);
-                } else {
-                    r.remove(j);
-                }
-                i++;
-            }
-            for (final Object o : r) {
-                System.out.println(parent + " result has extra items");
-            }
-        } else {
-            if (expect != null && !expect.equals(result)) {
-                System.out.println(parent + " results are not equal: \"" + expect + "\" != \""
-                        + result + "\"");
-            }
-        }
-    }
     
-    private Boolean unorderedEquals(Object v1, Object v2) {
-    	if (v1 == null) {
-    		return v2 == null;
-    	} else if (v2 == null) {
-    		return v1 == null;
-    	} else if (v1 instanceof Map && v2 instanceof Map) {
-    		Map<String,Object> m1 = (Map<String,Object>)v1;
-    		Map<String,Object> m2 = (Map<String,Object>)v2;
-    		if (m1.size() != m2.size()) {
-    			return false;
-    		}
-    		for (String key : m1.keySet()) {
-    			if (!m2.containsKey(key) || !unorderedEquals(m1.get(key), m2.get(key))) {
-    				return false;
-    			}
-    		}
-    		return true;
-    	} else if (v1 instanceof List && v2 instanceof List) {
-    		List<Object> l1 = (List<Object>)v1;
-    		List<Object> l2 = (List<Object>)v2;
-    		if (l1.size() != l2.size()) {
-    			
-    			return false;
-    		}
-    		for (Object o1 : l1) {
-    			Boolean gotmatch = false;
-    			for (Object o2 : l2) {
-    				if (unorderedEquals(o1, o2)) {
-    					gotmatch = true;
-    					break;
-    				}
-    			}
-    			if (!gotmatch) {
-    				return false;
-    			}
-    		}
-    		return true;
-    	} else {
-    		return v1.equals(v2);
-    	}
-    }
 }

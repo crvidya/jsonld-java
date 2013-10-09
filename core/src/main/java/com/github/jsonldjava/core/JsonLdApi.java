@@ -1,11 +1,10 @@
 package com.github.jsonldjava.core;
 
-import static com.github.jsonldjava.core.JSONLDUtils.isKeyword;
+import static com.github.jsonldjava.core.JsonLdUtils.isKeyword;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.jsonldjava.core.JsonLdError.Error;
+import com.github.jsonldjava.utils.JSONUtils;
 
 public class JsonLdApi {
 
@@ -762,4 +762,190 @@ public class JsonLdApi {
     public Object expand(Context activeCtx, Object element) throws JsonLdError {
     	return expand(activeCtx, null, element);
     }
+    
+    void generateNodeMap(Object element, Map<String, Object> nodeMap) throws JsonLdError {
+    	generateNodeMap(element, nodeMap, "@default", null, null, null);
+    }
+    void generateNodeMap(Object element, Map<String, Object> nodeMap, String activeGraph) throws JsonLdError {
+    	generateNodeMap(element, nodeMap, activeGraph, null, null, null);
+    }
+    void generateNodeMap(Object element, Map<String, Object> nodeMap, String activeGraph,
+            String activeSubject, String activeProperty, Map<String,Object> list) throws JsonLdError {
+        // 1)
+        if (element instanceof List) {
+        	// 1.1)
+            for (final Object item : (List<Object>) element) {
+                generateNodeMap(item, nodeMap, activeGraph, activeSubject, activeProperty, list);
+            }
+            return;
+        }
+
+        // for convenience 
+        Map<String,Object> elem = (Map<String,Object>)element;
+        
+        // 2)
+        if (!nodeMap.containsKey(activeGraph)) {
+        	nodeMap.put(activeGraph, new LinkedHashMap<String, Object>());
+        }
+        Map<String,Object> graph = (Map<String, Object>) nodeMap.get(activeGraph);
+        Map<String,Object> node = (Map<String, Object>) (activeSubject == null ? null : graph.get(activeSubject));
+
+        // 3)
+        if (elem.containsKey("@type")) {
+        	// 3.1)
+        	List<String> oldTypes;
+        	List<String> newTypes = new ArrayList<String>();
+        	if (elem.get("@type") instanceof List) {
+        		oldTypes = (List<String>) elem.get("@type");
+        	} else {
+        		oldTypes = new ArrayList<String>();
+        		oldTypes.add((String)elem.get("@type"));
+        	}
+        	for (String item : oldTypes) {
+        		if (item.startsWith("_:")) {
+        			newTypes.add(generateBlankNodeIdentifier(item));
+        		} else {
+        			newTypes.add(item);
+        		}
+        	}
+        	if (elem.get("@type") instanceof List) {
+        		elem.put("@type", newTypes);
+        	} else {
+        		elem.put("@type", newTypes.get(0));
+        	}
+        }
+        
+        // 4)
+        if (elem.containsKey("@value")) {
+        	// 4.1)
+        	if (list == null) {
+        		JsonLdUtils.mergeValue(node, activeProperty, elem);
+        	}
+        	// 4.2) 
+        	else {
+        		JsonLdUtils.mergeValue(list, "@list", elem);
+        	}
+        }
+        
+        // 5)
+        else if (elem.containsKey("@list")) {
+        	// 5.1)
+        	Map<String,Object> result = new LinkedHashMap<String, Object>();
+        	result.put("@list", new ArrayList<Object>());
+        	// 5.2)
+        	for (Object item : (List<Object>)elem.get("@list")) {
+        		generateNodeMap(item, nodeMap, activeGraph, activeSubject, activeProperty, result);
+        	}
+        	// 5.3)
+        	JsonLdUtils.mergeValue(node, activeProperty, result);
+        }
+        
+        // 6)
+        else {
+        	// 6.1)
+        	String id = (String) elem.remove("@id");
+        	if (id != null) {
+        		if (id.startsWith("_:")) {
+        			id = generateBlankNodeIdentifier(id);
+        		}
+        	}
+        	// 6.2)
+        	else {
+        		id = generateBlankNodeIdentifier(null);
+        	}
+        	// 6.3)
+        	if (!graph.containsKey(id)) {
+        		Map<String,Object> tmp = new LinkedHashMap<String, Object>();
+        		tmp.put("@id", id);
+        		graph.put(id, tmp);
+        	}
+        	// 6.4)
+        	if (activeProperty != null) {
+        		Map<String,Object> reference = new LinkedHashMap<String, Object>();
+        		reference.put("@id", id);
+        		// 6.4.2)
+        		if (list == null) {
+        			// 6.4.2.1+2)
+        			JsonLdUtils.mergeValue(node, activeProperty, reference);
+        		}
+        		// 6.4.3) TODO: SPEC says to add ELEMENT to @list member, should be REFERENCE
+        		else {
+        			JsonLdUtils.mergeValue(list, "@list", reference);
+        		}
+        	}
+        	// 6.5)
+        	node = (Map<String, Object>) graph.get(id);
+        	// 6.6)
+        	if (elem.containsKey("@type")) {
+        		for (Object type : (List<Object>)elem.remove("@type")) {
+        			JsonLdUtils.mergeValue(node, "@type", type);
+        		}
+        	}
+        	// 6.7)
+        	if (elem.containsKey("@index")) {
+        		Object elemIndex = elem.remove("@index");
+        		if (node.containsKey("@index")) {
+        			if (!JsonLdUtils.deepCompare(node.get("@index"), elemIndex)) {
+        				throw new JsonLdError(Error.CONFLICTING_INDEXES, "");
+        			}
+        		} else {
+        			node.put("@index", elemIndex);
+        		}
+        	}
+        	// 6.8)
+        	if (elem.containsKey("@reverse")) {
+        		// 6.8.2+6.8.4)
+        		Map<String,Object> reverseMap = (Map<String, Object>) elem.remove("@reverse");
+        		// 6.8.3)
+        		for (String property : reverseMap.keySet()) {
+        			List<Object> values = (List<Object>) reverseMap.get(property);
+        			// 6.8.3.1)
+        			for (Object value : values) {
+        				// 6.8.1) TODO: SPEC for pass by reference languages, referencedNode needs to be recreated for each loop, 
+        				// otherwise the @id member gets removed inside the generateNodeMap call and screws things up for
+        				// subsequent calls
+                		Map<String,Object> referencedNode = new LinkedHashMap<String, Object>();
+                		referencedNode.put("@id", id);
+        				// 6.8.3.1.1)
+        				JsonLdUtils.mergeValue((Map<String, Object>) value, property, referencedNode);
+        				// 6.8.3.1.2)
+        				generateNodeMap(value, nodeMap, activeGraph, null, null, null);
+        			}
+        		}
+        	}
+        	// 6.9)
+        	if (elem.containsKey("@graph")) {
+        		generateNodeMap(elem.remove("@graph"), nodeMap, id, null, null, null);
+        	}
+        	// 6.10)
+        	List<String> keys = new ArrayList<String>(elem.keySet());
+        	Collections.sort(keys);
+        	for (String property : keys) {
+        		Object value = elem.get(property);
+        		// 6.10.1)
+        		if (property.startsWith("_:")) {
+        			property = generateBlankNodeIdentifier(property);
+        		}
+        		// 6.10.2)
+        		if (!node.containsKey(property)) {
+        			node.put(property, new ArrayList<Object>());
+        		}
+        		// 6.10.3)
+        		generateNodeMap(value, nodeMap, activeGraph, id, property, null);
+        	}
+        }
+    }
+
+    private Map<String,String> blankNodeIdentifierMap = new LinkedHashMap<String, String>();
+    private int blankNodeCounter = 0;
+	private String generateBlankNodeIdentifier(String id) {
+		if (id != null && blankNodeIdentifierMap.containsKey(id)) {
+			return blankNodeIdentifierMap.get(id);
+		}
+		String bnid = "_:b" + blankNodeCounter++;
+		if (id != null) {
+			blankNodeIdentifierMap.put(id, bnid);
+		}
+		return bnid;
+	}
 }

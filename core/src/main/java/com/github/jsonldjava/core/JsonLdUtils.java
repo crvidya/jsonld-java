@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -16,7 +17,7 @@ import com.github.jsonldjava.utils.JSONUtils;
 import com.github.jsonldjava.utils.Obj;
 import com.github.jsonldjava.utils.URL;
 
-public class JSONLDUtils {
+public class JsonLdUtils {
 
     private static final int MAX_CONTEXT_URLS = 10;
 
@@ -41,10 +42,111 @@ public class JSONLDUtils {
                 || "@type".equals(key) || "@value".equals(key) || "@vocab".equals(key);
     }
 
-    static boolean isAbsoluteIri(String value) {
-        return value.contains(":");
+    public static Boolean deepCompare(Object v1, Object v2, Boolean listOrderMatters) {
+    	if (v1 == null) {
+    		return v2 == null;
+    	} else if (v2 == null) {
+    		return v1 == null;
+    	} else if (v1 instanceof Map && v2 instanceof Map) {
+    		Map<String,Object> m1 = (Map<String,Object>)v1;
+    		Map<String,Object> m2 = (Map<String,Object>)v2;
+    		if (m1.size() != m2.size()) {
+    			return false;
+    		}
+    		for (String key : m1.keySet()) {
+    			if (!m2.containsKey(key) || !deepCompare(m1.get(key), m2.get(key), listOrderMatters)) {
+    				return false;
+    			}
+    		}
+    		return true;
+    	} else if (v1 instanceof List && v2 instanceof List) {
+    		List<Object> l1 = (List<Object>)v1;
+    		List<Object> l2 = (List<Object>)v2;
+    		if (l1.size() != l2.size()) {
+    			
+    			return false;
+    		}
+    		// used to mark members of l2 that we have already matched to avoid
+    		// matching the same item twice for lists that have duplicates 
+    		boolean alreadyMatched[] = new boolean[l2.size()]; 
+    		for (int i = 0 ; i < l1.size() ; i++) {
+    			Object o1 = l1.get(i);
+    			Boolean gotmatch = false;
+    			if (listOrderMatters) {
+    				gotmatch = deepCompare(o1, l2.get(i), listOrderMatters);
+    			} else {
+	    			for (int j = 0; j < l2.size() ; j++) {
+	    				if (!alreadyMatched[j] && deepCompare(o1, l2.get(j), listOrderMatters)) {
+	    					alreadyMatched[j] = true;
+	    					gotmatch = true;
+	    					break;
+	    				}
+	    			}
+    			}
+    			if (!gotmatch) {
+    				return false;
+    			}
+    		}
+    		return true;
+    	} else {
+    		return v1.equals(v2);
+    	}
+    }
+    
+    public static Boolean deepCompare(Object v1, Object v2) {
+    	return deepCompare(v1, v2, false);
+    }
+    
+    public static boolean deepContains(List<Object> values, Object value) {
+    	for (Object item : values) {
+    		if (deepCompare(item, value, false)) {
+    			return true;
+    		}
+    	}
+		return false;
+	}
+    
+    static void mergeValue(Map<String,Object> obj, String key, Object value) {
+    	if (obj == null) {
+    		return;
+    	}
+    	List<Object> values = (List<Object>) obj.get(key);
+    	if (values == null) {
+    		values = new ArrayList<Object>();
+    		obj.put(key, values);
+    	}
+    	if ("@list".equals(key) || (value instanceof Map && ((Map<String,Object>) value).containsKey("@list")) || !deepContains(values, value)) {
+    		values.add(value);
+    	}
+    }
+    
+    static void mergeCompactedValue(Map<String,Object> obj, String key, Object value) {
+    	if (obj == null) {
+    		return;
+    	}
+    	Object prop = obj.get(key);
+    	if (prop == null) {
+    		obj.put(key, value);
+    		return;
+    	} 
+    	if (!(prop instanceof List)) {
+    		List<Object> tmp = new ArrayList<Object>();
+    		tmp.add(prop);    		
+    	}
+		if (value instanceof List) {
+			((List<Object>) prop).addAll((List<Object>) value);
+		} else {
+			((List<Object>) prop).add(value);
+		}
     }
 
+    public static boolean isAbsoluteIri(String value) {
+    	// TODO: this is a bit simplistic!
+		return value.contains(":");
+	}
+    
+	////////////////////////////////////////////////////// OLD CODE BELOW
+    
     /**
      * Adds a value to a subject. If the value is an array, all values in the
      * array will be added.
@@ -224,78 +326,6 @@ public class JSONLDUtils {
                 rval.add(tmp);
             }
         }
-
-        return rval;
-    }
-
-    /**
-     * Expands the given value by using the coercion and keyword rules in the
-     * given context.
-     * 
-     * @param ctx
-     *            the active context to use.
-     * @param property
-     *            the property the value is associated with.
-     * @param value
-     *            the value to expand.
-     * @param base
-     *            the base IRI to use.
-     * 
-     * @return the expanded value.
-     * @throws JsonLdError
-     */
-    static Object expandValue(Context activeCtx, String activeProperty, Object value)
-            throws JsonLdError {
-        // nothing to expand
-        if (value == null) {
-            return null;
-        }
-
-        // special-case expand @id and @type (skips '@id' expansion)
-        final String expandedProperty = activeCtx.expandIri(activeProperty, false, true, null,
-                null);
-        if ("@id".equals(expandedProperty)) {
-            return activeCtx.expandIri((String) value, true, false, null, null);
-        } else if ("@type".equals(expandedProperty)) {
-            return activeCtx.expandIri((String) value, true, true, null, null);
-        }
-
-        // get type definition from context
-        final Object type = activeCtx.getContextValue(activeProperty, "@type");
-
-        // do @id expansion (automatic for @graph)
-        if ("@id".equals(type) || ("@graph".equals(expandedProperty) && isString(value))) {
-            final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", activeCtx.expandIri((String) value, true, false, null, null));
-            return tmp;
-        }
-
-        // do @id expansion w/vocab
-        if ("@vocab".equals(type)) {
-            final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
-            tmp.put("@id", activeCtx.expandIri((String) value, true, true, null, null));
-            return tmp;
-        }
-
-        // do not expand keyword values
-        if (isKeyword(expandedProperty)) {
-            return value;
-        }
-
-        final Map<String, Object> rval = new LinkedHashMap<String, Object>();
-
-        // other type
-        if (type != null) {
-            rval.put("@type", type);
-        }
-        // check for language tagging
-        else if (isString(value)) {
-            final Object language = activeCtx.getContextValue(activeProperty, "@language");
-            if (language != null) {
-                rval.put("@language", language);
-            }
-        }
-        rval.put("@value", value);
 
         return rval;
     }

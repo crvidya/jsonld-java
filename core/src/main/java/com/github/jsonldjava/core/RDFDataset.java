@@ -9,11 +9,11 @@ import static com.github.jsonldjava.core.JSONLDConsts.XSD_BOOLEAN;
 import static com.github.jsonldjava.core.JSONLDConsts.XSD_DOUBLE;
 import static com.github.jsonldjava.core.JSONLDConsts.XSD_INTEGER;
 import static com.github.jsonldjava.core.JSONLDConsts.XSD_STRING;
-import static com.github.jsonldjava.core.JSONLDUtils.isKeyword;
-import static com.github.jsonldjava.core.JSONLDUtils.isList;
-import static com.github.jsonldjava.core.JSONLDUtils.isObject;
-import static com.github.jsonldjava.core.JSONLDUtils.isString;
-import static com.github.jsonldjava.core.JSONLDUtils.isValue;
+import static com.github.jsonldjava.core.JsonLdUtils.isKeyword;
+import static com.github.jsonldjava.core.JsonLdUtils.isList;
+import static com.github.jsonldjava.core.JsonLdUtils.isObject;
+import static com.github.jsonldjava.core.JsonLdUtils.isString;
+import static com.github.jsonldjava.core.JsonLdUtils.isValue;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
