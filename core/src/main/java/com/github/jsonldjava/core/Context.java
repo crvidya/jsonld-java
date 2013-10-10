@@ -142,6 +142,8 @@ public class Context extends LinkedHashMap<String, Object> {
     		if (context == null) {
     			result = new Context(this.options);
     			continue;
+    		} else if (context instanceof Context) {
+    			result = ((Context) context).clone();
     		}
     		// 3.2)
     		else if (context instanceof String) {
@@ -149,23 +151,18 @@ public class Context extends LinkedHashMap<String, Object> {
     			uri = URL.resolve(uri, (String)context);
 				// 3.2.2
 				if (remoteContexts.contains(uri)) {
-					throw new JsonLdError(Error.RERCURSIVE_CONTEXT_INCLUSION, (String)context);
+					throw new JsonLdError(Error.RECURSIVE_CONTEXT_INCLUSION, (String)uri);
 				}
-				remoteContexts.add((String)context);
+				remoteContexts.add((String)uri);
 
 				// 3.2.3: Dereference context
-				try {
-					RemoteDocument rd = this.options.documentLoader.loadDocument(uri);
-					Object remoteContext = rd.document;
-					if (!(remoteContext instanceof Map) || !((Map<String,Object>)remoteContext).containsKey("@context")) {
-						// If the dereferenced document has no top-level JSON object with an @context member
-						throw new JsonLdError(Error.INVALID_REMOTE_CONTEXT, (String)context);
-					}
-					context = ((Map<String,Object>)remoteContext).get("@context");
-				} catch (Exception e) {
-					// If context cannot be dereferenced
-					throw new JsonLdError(Error.LOADING_REMOTE_CONTEXT_FAILED, (String)context);
+				RemoteDocument rd = this.options.documentLoader.loadDocument((String)uri);
+				Object remoteContext = rd.document;
+				if (!(remoteContext instanceof Map) || !((Map<String,Object>)remoteContext).containsKey("@context")) {
+					// If the dereferenced document has no top-level JSON object with an @context member
+					throw new JsonLdError(Error.INVALID_REMOTE_CONTEXT, (String)context);
 				}
+				context = ((Map<String,Object>)remoteContext).get("@context");
 				
 				// 3.2.4
 				result = result.parse(context, remoteContexts);
@@ -178,29 +175,37 @@ public class Context extends LinkedHashMap<String, Object> {
     		
     		// 3.4
     		if (remoteContexts.isEmpty() && ((Map<String, Object>) context).containsKey("@base")) {
-    			String value = (String)((Map<String,Object>) context).get("@base");
+    			Object value = ((Map<String,Object>) context).get("@base");
     			if (value == null) {
     				result.remove("@base");
-    			} else if (JsonLdUtils.isAbsoluteIri(value)) {
-    				result.put("@base", value);
+    			} else if (value instanceof String) {
+    				if (JsonLdUtils.isAbsoluteIri((String)value)) { 
+    					result.put("@base", value);
+    				} else {
+	    				String baseUri = (String)result.get("@base");
+	    				if (!JsonLdUtils.isAbsoluteIri(baseUri)) {
+	    					throw new JsonLdError(Error.INVALID_BASE_IRI, baseUri);
+	    				}
+	    				result.put("@base", URL.resolve(baseUri, (String)value));
+	    			}
     			} else {
-    				String baseUri = (String)result.get("@base");
-    				if (!JsonLdUtils.isAbsoluteIri(baseUri)) {
-    					throw new JsonLdError(Error.INVALID_BASE_IRI, baseUri);
-    				}
-    				result.put("@base", URL.resolve(baseUri, value));
+    				throw new JsonLdError(JsonLdError.Error.INVALID_BASE_IRI, "@base must be a string");
     			}
     		}
     		
     		// 3.5
     		if (((Map<String, Object>) context).containsKey("@vocab")) {
-    			String value = (String)((Map<String,Object>) context).get("@vocab");
+    			Object value = ((Map<String,Object>) context).get("@vocab");
     			if (value == null) {
     				result.remove("@vocab");
-    			} else if (JsonLdUtils.isAbsoluteIri(value)) {
-    				result.put("@vocab", value);
+    			} else if (value instanceof String) {
+    				if (JsonLdUtils.isAbsoluteIri((String)value)) {
+    					result.put("@vocab", value);
+    				} else {
+    					throw new JsonLdError(Error.INVALID_VOCAB_MAPPING, "@value must be an absolute IRI");
+    				}
     			} else {
-    				throw new JsonLdError(Error.INVALID_VOCAB_MAPPING, value);
+    				throw new JsonLdError(Error.INVALID_VOCAB_MAPPING, "@vocab must be a string or null");
     			}
     		}
 
@@ -289,14 +294,15 @@ public class Context extends LinkedHashMap<String, Object> {
         	}
         	String type = (String) val.get("@type");
         	try {
-        		type = this.expandIri((String) val.get("@type"), true, true, context, defined);
+        		type = this.expandIri((String) val.get("@type"), false, true, context, defined);
         	} catch (JsonLdError error) {
         		if (error.getType() != Error.INVALID_IRI_MAPPING) {
         			throw error;
         		}
         		throw new JsonLdError(Error.INVALID_TYPE_MAPPING, type);
         	}
-        	if ("@id".equals(type) || "@vocab".equals(type) || JsonLdUtils.isAbsoluteIri(type)) {
+        	// TODO: fix check for absoluteIri (blank nodes shouldn't count, at least not here!)
+        	if ("@id".equals(type) || "@vocab".equals(type) || (!type.startsWith("_:") && JsonLdUtils.isAbsoluteIri(type))) {
         		definition.put("@type", type);
         	} else {
         		throw new JsonLdError(Error.INVALID_TYPE_MAPPING, type);
@@ -382,8 +388,8 @@ public class Context extends LinkedHashMap<String, Object> {
         
         // 17)
         if (val.containsKey("@language") && !val.containsKey("@type")) {
-        	final String language = (String) val.get("@language");
-        	if (language == null || language instanceof String) {
+        	if (val.get("@language") == null || val.get("@language") instanceof String) {
+        		final String language = (String) val.get("@language");
         		definition.put("@language", language != null ? language.toLowerCase() : null);
         	} else {
         		throw new JsonLdError(Error.INVALID_LANGUAGE_MAPPING, "@language must be a string or null");
@@ -453,12 +459,10 @@ public class Context extends LinkedHashMap<String, Object> {
     		return this.get("@vocab") + value;
     	}
     	// 6)
-    	if (relative) {
-    		// TODO: make sure this is the right place to get base from.
-    		// 		 i'm not sure if the base that's passed in as an option
-    		//		 should override the @base in the context or if the @context
-    		//		 should even be able to have a @base
-    		value = URL.resolve((String) this.get("@base"), value);
+    	else if (relative) {
+    		return URL.resolve((String) this.get("@base"), value);
+    	} else if (context != null && JsonLdUtils.isRelativeIri(value)) {
+    		throw new JsonLdError(Error.INVALID_IRI_MAPPING, "not an absolute IRI: " + value);
     	}
     	// 7)
 		return value;

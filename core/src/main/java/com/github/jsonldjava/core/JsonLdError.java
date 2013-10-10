@@ -8,38 +8,70 @@ public class JsonLdError extends Exception {
     Map<String, Object> details;
     private Error type;
 
-    public JsonLdError(String string, Map<String, Object> details) {
-        super(string);
-        this.details = details;
-    }
-    
     public JsonLdError(Error type, Object detail) {
     	// TODO: pretty toString (e.g. print whole json objects)
     	super(detail == null ? "" : detail.toString());
     	this.type = type;
     }
 
-    public JsonLdError(String string) {
-        super(string);
-        details = new HashMap();
-    }
-
-    public JsonLdError setDetail(String string, Object val) {
-        details.put(string, val);
-        // System.out.println("ERROR DETAIL: " + string + ": " +
-        // val.toString());
-        return this;
+    public JsonLdError(Error type) {
+        super("");
+        this.type = type;
     }
 
     public enum Error {
-        SYNTAX_ERROR, PARSE_ERROR, RDF_ERROR, CONTEXT_URL_ERROR, INVALID_URL, COMPACT_ERROR, CYCLICAL_CONTEXT, FLATTEN_ERROR, FRAME_ERROR, NORMALIZE_ERROR, UNKNOWN_FORMAT, INVALID_INPUT,
-        NOT_IMPLEMENTED,
-        // TODO: remove unused error types (should be the ones above this line)
-        RERCURSIVE_CONTEXT_INCLUSION, LOADING_REMOTE_CONTEXT_FAILED, INVALID_REMOTE_CONTEXT, INVALID_LOCAL_CONTEXT, INVALID_BASE_IRI, INVALID_VOCAB_MAPPING, INVALID_DEFAULT_LANGUAGE, 
-        CYCLIC_IRI_MAPPING, KEYWORD_REDEFINITION, INVALID_TERM_DEFINITION, INVALID_TYPE_MAPPING, INVALID_IRI_MAPPING, INVALID_REVERSE_PROPERTY, INVALID_KEYWORD_ALIAS, 
-        INVALID_CONTAINER_MAPPING, INVALID_LANGUAGE_MAPPING, LIST_OF_LISTS, INVALID_REVERSE_PROPERY_MAP, COLLIDING_KEYWORDS, INVALID_ID_VALUE, INVALID_TYPE_VALUE, INVALID_VALUE_OBJECT_VALUE, 
-        INVALID_LANGUAGE_TAGGED_STRING, INVALID_INDEX_VALUE, INVALID_REVERSE_VALUE, INVALID_REVERSE_PROPERTY_VALUE, INVALID_LANGUAGE_MAP_VALUE, INVALID_VALUE_OBJECT, 
-        INVALID_LANGUAGE_TAGGED_VALUE, INVALID_TYPED_VALUE, INVALID_SET_OR_LIST_OBJECT, LOADING_DOCUMENT_FAILED, COMPACTION_TO_LIST_OF_LISTS, CONFLICTING_INDEXES,
+    	LOADING_DOCUMENT_FAILED ("loading document failed"),
+    	LIST_OF_LISTS ("list of lists"),
+    	INVALID_INDEX_VALUE ("invalid @index value"),
+    	CONFLICTING_INDEXES ("conflicting indexes"),
+    	INVALID_ID_VALUE ("invalid @id value"),
+    	INVALID_LOCAL_CONTEXT ("invalid local context"),
+    	MULTIPLE_CONTEXT_LINK_HEADERS ("multiple context link headers"),
+    	LOADING_REMOTE_CONTEXT_FAILED ("loading remote context failed"),
+    	INVALID_REMOTE_CONTEXT ("invalid remote context"),
+    	RECURSIVE_CONTEXT_INCLUSION ("recursive context inclusion"),
+    	INVALID_BASE_IRI ("invalid base IRI"),
+    	INVALID_VOCAB_MAPPING ("invalid vocab mapping"),
+    	INVALID_DEFAULT_LANGUAGE ("invalid default language"),
+    	KEYWORD_REDEFINITION ("keyword redefinition"),
+    	INVALID_TERM_DEFINITION ("invalid term definition"),
+    	INVALID_REVERSE_PROPERTY ("invalid reverse property"),
+    	INVALID_IRI_MAPPING ("invalid IRI mapping"),
+    	CYCLIC_IRI_MAPPING ("cyclic IRI mapping"),
+    	INVALID_KEYWORD_ALIAS ("invalid keyword alias"),
+    	INVALID_TYPE_MAPPING ("invalid type mapping"),
+    	INVALID_LANGUAGE_MAPPING ("invalid language mapping"),
+    	COLLIDING_KEYWORDS ("colliding keywords"),
+    	INVALID_CONTAINER_MAPPING ("invalid container mapping"),
+    	INVALID_TYPE_VALUE ("invalid type value"),
+    	INVALID_VALUE_OBJECT ("invalid value object"),
+    	INVALID_VALUE_OBJECT_VALUE ("invalid value object value"),
+    	INVALID_LANGUAGE_TAGGED_STRING ("invalid language-tagged string"),
+    	INVALID_LANGUAGE_TAGGED_VALUE ("invalid language-tagged value"),
+    	INVALID_TYPED_VALUE ("invalid typed value"),
+    	INVALID_SET_OR_LIST_OBJECT ("invalid set or list object"),
+    	INVALID_LANGUAGE_MAP_VALUE ("invalid language map value"),
+    	COMPACTION_TO_LIST_OF_LISTS ("compaction to list of lists"),
+    	INVALID_REVERSE_PROPERTY_MAP ("invalid reverse property map"),
+    	INVALID_REVERSE_VALUE ("invalid @reverse value"),
+    	INVALID_REVERSE_PROPERTY_VALUE ("invalid reverse property value"),
+    	
+    	// non spec related errors
+    	SYNTAX_ERROR ("syntax error"),
+    	NOT_IMPLEMENTED ("not implemnted"),
+    	UNKNOWN_FORMAT ("unknown format"),
+    	INVALID_INPUT ("invalid input"),
+    	PARSE_ERROR ("parse error"),
+    	UNKNOWN_ERROR ("unknown error");
+    	
+    	private final String error;
+    	private Error(String error) {
+    		this.error = error;
+    	}
+    	
+    	public String toString() {
+    		return error;
+    	}
     }
 
     public JsonLdError setType(Error error) {
@@ -58,7 +90,9 @@ public class JsonLdError extends Exception {
     @Override
     public String getMessage() {
         String msg = super.getMessage();
-        // TODO: display error messages which match the Error type set (e.g. "The document could not be loaded or parsed as JSON." + msg if msg != null)
-        return msg;
+        if (msg != null && !"".equals(msg)) {
+        	return type.toString() + ": " + msg;
+        }
+        return type.toString();
     }
 }

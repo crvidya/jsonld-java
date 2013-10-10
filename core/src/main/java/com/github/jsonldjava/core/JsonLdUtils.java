@@ -361,9 +361,7 @@ public class JsonLdUtils {
             for (final Object item : val) {
                 if (!isString(item)) {
                     throw new JsonLdError(
-                            "Invalid JSON-LD syntax; language map values must be strings.")
-                            .setDetail("languageMap", languageMap).setType(
-                                    JsonLdError.Error.SYNTAX_ERROR);
+                            JsonLdError.Error.SYNTAX_ERROR);
                 }
                 final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
                 tmp.put("@value", item);
@@ -409,8 +407,7 @@ public class JsonLdUtils {
 
         if (!isValid) {
             throw new JsonLdError(
-                    "Invalid JSON-LD syntax; \"@type\" value must a string, a subject reference, an array of strings or subject references, or an empty object.")
-                    .setType(JsonLdError.Error.SYNTAX_ERROR).setDetail("value", v);
+                    JsonLdError.Error.SYNTAX_ERROR);
         }
         return true;
     }
@@ -789,9 +786,7 @@ public class JsonLdUtils {
                 .compile("(http|https)://(\\w+:{0,1}\\w*@)?(\\S+)(:[0-9]+)?(/|/([\\w#!:.?+=&%@!\\-/]))?");
 
         if (cycles.size() > MAX_CONTEXT_URLS) {
-            throw new JsonLdError("Maximum number of @context URLs exceeded.").setType(
-                    JsonLdError.Error.CONTEXT_URL_ERROR).setDetail("max",
-                    MAX_CONTEXT_URLS);
+            throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
         }
 
         // for tracking the URLs to resolve
@@ -809,8 +804,7 @@ public class JsonLdUtils {
             if (Boolean.FALSE.equals(urls.get(url))) {
                 // validate URL
                 if (!regex.matcher(url).matches()) {
-                    throw new JsonLdError("Malformed URL.").setType(
-                            JsonLdError.Error.INVALID_URL).setDetail("url", url);
+                    throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
                 }
                 queue.add(url);
             }
@@ -821,8 +815,7 @@ public class JsonLdUtils {
         for (final String url : queue) {
             // check for context URL cycle
             if (cycles.containsKey(url)) {
-                throw new JsonLdError("Cyclical @context URLs detected.").setType(
-                        JsonLdError.Error.CONTEXT_URL_ERROR).setDetail("url", url);
+                throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
             }
             final Map<String, Object> _cycles = (Map<String, Object>) clone(cycles);
             _cycles.put(url, Boolean.TRUE);
@@ -841,14 +834,11 @@ public class JsonLdUtils {
                     findContextUrls(input, urls, true);
                 }
             } catch (final JsonParseException e) {
-                throw new JsonLdError("URL does not resolve to a valid JSON-LD object.")
-                        .setType(JsonLdError.Error.INVALID_URL).setDetail("url", url);
+            	throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
             } catch (final MalformedURLException e) {
-                throw new JsonLdError("Malformed URL.").setType(
-                        JsonLdError.Error.INVALID_URL).setDetail("url", url);
+            	throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
             } catch (final IOException e) {
-                throw new JsonLdError("Unable to open URL.").setType(
-                        JsonLdError.Error.INVALID_URL).setDetail("url", url);
+            	throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
             }
         }
 

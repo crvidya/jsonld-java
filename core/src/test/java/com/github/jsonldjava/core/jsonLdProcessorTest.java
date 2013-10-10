@@ -34,6 +34,7 @@ import org.junit.runners.Parameterized.Parameters;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.github.jsonldjava.core.JsonLdError.Error;
 import com.github.jsonldjava.impl.TurtleTripleCallback;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -241,7 +242,7 @@ public class jsonLdProcessorTest {
                 if (
                 (testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name")))
                 || testType.contains("jld:CompactTest")
-                || (testType.contains("jld:FlattenTest") && !"Error handling".equals(manifest.get("name")))
+                || testType.contains("jld:FlattenTest")
                 || testType.contains("jld:FrameTest") 
                 || testType.contains("jld:FromRDFTest")
                 || testType.contains("jld:ToRDFTest")
@@ -267,6 +268,38 @@ public class jsonLdProcessorTest {
         return rdata;
     }
 
+    private class TestDocumentLoader extends DocumentLoader {
+    	
+    	private String base;
+
+		public TestDocumentLoader(String base) {
+    		this.base = base;
+    	}
+    	
+    	@Override
+    	public RemoteDocument loadDocument(String url) throws JsonLdError {
+    		if (url == null) {
+    			throw new JsonLdError(JsonLdError.Error.LOADING_REMOTE_CONTEXT_FAILED);
+    		}
+    		if (url.contains(":")) {
+    			// check if the url is relative to the test base
+    			if (url.startsWith(this.base)) {
+    				url = url.substring(this.base.length());
+    			} else {
+    				// we can't load remote documents from the test suite
+    				throw new JsonLdError(JsonLdError.Error.NOT_IMPLEMENTED);
+    			}
+    		}
+    		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
+    		final InputStream inputStream = cl.getResourceAsStream(TEST_DIR + "/" + url);
+    		try {
+				return new RemoteDocument(url, JSONUtils.fromInputStream(inputStream));
+			} catch (IOException e) {
+				throw new JsonLdError(JsonLdError.Error.LOADING_DOCUMENT_FAILED);
+			}
+    	}
+    }
+    
     private final String group;
     private final Map<String, Object> test;
 
@@ -366,8 +399,6 @@ public class jsonLdProcessorTest {
                 sparql += buffer + "\n";
             }
         } else if (testType.contains("jld:NegativeEvaluationTest")) {
-            // TODO: this is hacky, but works for the limited number of negative
-            // evaluation tests that are currently present
             failure_expected = true;
         } else {
             assertFalse("Nothing to expect from this test, thus nothing to test if it works", true);
@@ -378,6 +409,7 @@ public class jsonLdProcessorTest {
         // OPTIONS SETUP
         final JsonLdOptions options = new JsonLdOptions("http://json-ld.org/test-suite/tests/"
                 + test.get("input"));
+        options.documentLoader = new TestDocumentLoader("http://json-ld.org/test-suite/tests/");
         if (test.containsKey("option")) {
         	Map<String,Object> test_opts = (Map<String, Object>) test.get("option");
         	if (test_opts.containsKey("base")) {
@@ -445,9 +477,16 @@ public class jsonLdProcessorTest {
 
         Boolean testpassed = false;
         try {
-            // TODO: for tests that are supposed to fail, a more detailed check
-            // that it failed in the right way is needed
-            testpassed = JsonLdUtils.deepCompare(expect, result) || failure_expected;
+        	if (failure_expected) {
+        		if (result instanceof JsonLdError) {
+        			testpassed = JSONUtils.equals(expect, ((JsonLdError) result).getType().toString());
+        			if (!testpassed) {
+        				((JsonLdError) result).printStackTrace();
+        			}
+        		}
+        	} else {
+        		testpassed = JsonLdUtils.deepCompare(expect, result);
+        	}
         } catch (final Exception e) {
             e.printStackTrace();
         }

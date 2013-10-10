@@ -125,9 +125,7 @@ class NormalizeUtils {
                                     }
                                     return rval;
                                 } else {
-                                    throw new JsonLdError("Unknown output format.")
-                                            .setType(JsonLdError.Error.UNKNOWN_FORMAT)
-                                            .setDetail("format", options.format);
+                                    throw new JsonLdError(JsonLdError.Error.UNKNOWN_FORMAT, options.format);
                                 }
                             }
                             String rval = "";

@@ -482,8 +482,7 @@ public class RDFDatasetUtils {
             // parse quad
             final Matcher match = Regex.QUAD.matcher(line);
             if (!match.matches()) {
-                throw new JsonLdError("Error while parsing N-Quads; invalid quad.")
-                        .setType(JsonLdError.Error.PARSE_ERROR).setDetail("line",
+                throw new JsonLdError(JsonLdError.Error.SYNTAX_ERROR, "Error while parsing N-Quads; invalid quad. line:" +
                                 lineNumber);
             }
 

@@ -273,8 +273,7 @@ public class JsonLdProcessor {
         if (rdfParsers.containsKey(options.format)) {
             parser = rdfParsers.get(options.format);
         } else {
-            throw new JsonLdError("Unknown input format.").setType(
-            		JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format", options.format);
+        	throw new JsonLdError(JsonLdError.Error.UNKNOWN_FORMAT, options.format);
         }
 
         // convert from RDF
@@ -306,8 +305,7 @@ public class JsonLdProcessor {
             } else if ("flattened".equals(options.outputForm)) {
                 return flatten(rval, dataset.getContext(), options);
             } else {
-                throw new JsonLdError("Unknown value for output form").setType(
-                        Error.INVALID_INPUT).setDetail("outputForm", options.outputForm);
+                throw new JsonLdError(JsonLdError.Error.UNKNOWN_ERROR);
             }
         }
         return rval;
@@ -368,9 +366,7 @@ public class JsonLdProcessor {
             } else if ("text/turtle".equals(options.format)) {
                 return new TurtleTripleCallback().call(dataset);
             } else {
-                throw new JsonLdError("Unknown output format.").setType(
-                        JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format",
-                        options.format);
+                throw new JsonLdError(JsonLdError.Error.UNKNOWN_FORMAT, options.format);
             }
         }
         return dataset;
@@ -407,14 +403,8 @@ public class JsonLdProcessor {
         
         final JsonLdOptions opts = options.clone();
         opts.format = null;
-        RDFDataset dataset;
-        try {
-            dataset = (RDFDataset) toRDF(input, opts);
-        } catch (final JsonLdError e) {
-            throw new JsonLdError(
-                    "Could not convert input to RDF dataset before normalization.").setType(
-                    		JsonLdError.Error.NORMALIZE_ERROR).setDetail("cause", e);
-        }
+        RDFDataset dataset = (RDFDataset) toRDF(input, opts);
+        
         return new JsonLdApi(options).normalize(dataset);
     }
 

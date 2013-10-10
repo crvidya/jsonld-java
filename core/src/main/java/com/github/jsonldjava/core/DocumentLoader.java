@@ -25,8 +25,16 @@ import com.github.jsonldjava.utils.JSONUtils;
 
 public class DocumentLoader {
 
-	public RemoteDocument loadDocument(String url) {
+	public RemoteDocument loadDocument(String url) throws JsonLdError {
+		// TODO: use fromURL to load document
+		// TODO: get http link context
 		return new RemoteDocument("", null);
+		/*
+		 } catch (Exception e) {
+					// If context cannot be dereferenced
+					throw new JsonLdError(Error.LOADING_REMOTE_CONTEXT_FAILED, (String)context);
+				}
+		 */
 	}
 	
     /**

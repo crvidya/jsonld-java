@@ -265,7 +265,11 @@ public class URL {
 			
 			uri = uri.resolve(pathToResolve);
 			// java doesn't discard unnecessary dot segments
-			return new URI(uri.getScheme(), uri.getAuthority(), URL.removeDotSegments(uri.getPath(), true), uri.getQuery(), uri.getFragment()).toString();
+			String path = uri.getPath();
+			if (path != null) {
+				path = URL.removeDotSegments(uri.getPath(), true);
+			}
+			return new URI(uri.getScheme(), uri.getAuthority(), path, uri.getQuery(), uri.getFragment()).toString();
 		} catch (URISyntaxException e) {
 			return null;
 		}

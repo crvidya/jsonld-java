@@ -457,7 +457,7 @@ public class JsonLdApi {
             	if (isKeyword(expandedProperty)) {
             		// 7.4.1)
             		if ("@reverse".equals(activeProperty)) {
-            			throw new JsonLdError(Error.INVALID_REVERSE_PROPERY_MAP, "a keyword cannot be used as a @reverse propery");
+            			throw new JsonLdError(Error.INVALID_REVERSE_PROPERTY_MAP, "a keyword cannot be used as a @reverse propery");
             		}
             		// 7.4.2)
             		if (result.containsKey(expandedProperty)) {
@@ -594,7 +594,7 @@ public class JsonLdApi {
             					for (Object item : items) {
                 					// 7.4.11.3.3.1.1)
             						if (item instanceof Map && (((Map<String,Object>) item).containsKey("@value") || ((Map<String,Object>) item).containsKey("@list"))) {
-            							throw new JsonLdError(Error.INVALID_REVERSE_PROPERTY_VALUE, "");
+            							throw new JsonLdError(Error.INVALID_REVERSE_PROPERTY_VALUE);
             						}
             						// 7.4.11.3.3.1.2)
             						if (!reverseMap.containsKey(property)) {
@@ -712,7 +712,7 @@ public class JsonLdApi {
             		for (Object item : (List<Object>)expandedValue) {
             			// 7.10.4.1)
             			if (item instanceof Map && (((Map<String,Object>) item).containsKey("@value") || ((Map<String,Object>) item).containsKey("@list"))) {
-            				throw new JsonLdError(Error.INVALID_REVERSE_PROPERTY_VALUE, "");
+            				throw new JsonLdError(Error.INVALID_REVERSE_PROPERTY_VALUE);
             			}
             			// 7.10.4.2)
             			if (!reverseMap.containsKey(expandedProperty)) {
@@ -759,13 +759,13 @@ public class JsonLdApi {
             		return null;
             	}
             	// 8.3)
-            	else if (!(rval instanceof String) && result.containsKey("@language")) {
+            	if (!(rval instanceof String) && result.containsKey("@language")) {
             		throw new JsonLdError(Error.INVALID_LANGUAGE_TAGGED_VALUE, "when @language is used, @value must be a string");
             	}
             	// 8.4)
             	else if (result.containsKey("@type")) {
             		// TODO: is this enough for "is an IRI"
-            		if (!(result.get("@type") instanceof String) || !((String)result.get("@type")).contains(":")) {
+            		if (!(result.get("@type") instanceof String) || ((String)result.get("@type")).startsWith("_:") || !((String)result.get("@type")).contains(":")) {
             			throw new JsonLdError(Error.INVALID_TYPED_VALUE, "value of @type must be an IRI");
             		}
             	}
@@ -957,7 +957,7 @@ public class JsonLdApi {
         		Object elemIndex = elem.remove("@index");
         		if (node.containsKey("@index")) {
         			if (!JsonLdUtils.deepCompare(node.get("@index"), elemIndex)) {
-        				throw new JsonLdError(Error.CONFLICTING_INDEXES, "");
+        				throw new JsonLdError(Error.CONFLICTING_INDEXES);
         			}
         		} else {
         			node.put("@index", elemIndex);
