@@ -243,9 +243,10 @@ public class jsonLdProcessorTest {
                 || testType.contains("jld:CompactTest")
                 || (testType.contains("jld:FlattenTest") && !"Error handling".equals(manifest.get("name")))
                 || testType.contains("jld:FrameTest") 
-                //|| testType.contains("jld:ToRDFTest")
+                || testType.contains("jld:FromRDFTest")
+                || testType.contains("jld:ToRDFTest")
                       //  || testType.contains("jld:NormalizeTest")
-                      //  || testType.contains("jld:FromRDFTest")
+                      //  
                 ) {
                     // System.out.println("Adding test: " + test.get("name"));
                     rdata.add(new Object[] {
@@ -375,6 +376,7 @@ public class jsonLdProcessorTest {
 
         Object result = null;
 
+        // OPTIONS SETUP
         final JsonLdOptions options = new JsonLdOptions("http://json-ld.org/test-suite/tests/"
                 + test.get("input"));
         if (test.containsKey("option")) {
@@ -390,7 +392,18 @@ public class jsonLdProcessorTest {
         	if (test_opts.containsKey("compactArrays")) {
         		options.setCompactArrays((Boolean)test_opts.get("compactArrays"));
         	}
+        	if (test_opts.containsKey("useNativeTypes")) {
+        		options.setUseNativeTypes((Boolean)test_opts.get("useNativeTypes"));
+        	}
+        	if (test_opts.containsKey("useRdfType")) {
+        		options.setUseRdfType((Boolean)test_opts.get("useRdfType"));
+        	}
+        	if (test_opts.containsKey("produceGeneralizedRdf")) {
+        		options.setProduceGeneralizedRdf((Boolean)test_opts.get("produceGeneralizedRdf"));
+        	}
         }
+        
+        // RUN TEST
         try {
         	if (testType.contains("jld:ExpandTest")) {
         		result = JsonLdProcessor.expand(input, options);
@@ -414,44 +427,19 @@ public class jsonLdProcessorTest {
                 final Map<String, Object> frameJson = (Map<String, Object>) JSONUtils
                         .fromInputStream(frameStream);
                 result = JsonLdProcessor.frame(input, frameJson, options);
+            } else if (testType.contains("jld:FromRDFTest")) {
+                result = JsonLdProcessor.fromRDF(input, options);
+            } else if (testType.contains("jld:ToRDFTest")) {
+                options.format = "application/nquads";
+                result = JsonLdProcessor.toRDF(input, options);
+                result = ((String) result).trim();
             } 
             /*
             if (testType.contains("jld:NormalizeTest")) {
                 options.format = "application/nquads";
                 result = JsonLdProcessor.normalize(input, options);
                 result = ((String) result).trim();
-            }
-            else if (testType.contains("jld:ExpandTest")) {
-                result = JsonLdProcessor.expand(input, options);
-            } else if (testType.contains("jld:CompactTest")) {
-                final InputStream contextStream = cl.getResourceAsStream(TEST_DIR + "/"
-                        + test.get("context"));
-                final Object contextJson = JSONUtils.fromInputStream(contextStream);
-                result = JsonLdProcessor.compact(input, contextJson, options);
-            } else if (testType.contains("jld:FlattenTest")) {
-                if (test.containsKey("context")) {
-                    final InputStream contextStream = cl.getResourceAsStream(TEST_DIR + "/"
-                            + test.get("context"));
-                    final Object contextJson = JSONUtils.fromInputStream(contextStream);
-                    result = JsonLdProcessor.flatten(input, contextJson, options);
-                } else {
-                    result = JsonLdProcessor.flatten(input, options);
-                }
-            } else if (testType.contains("jld:FrameTest")) {
-                final InputStream frameStream = cl.getResourceAsStream(TEST_DIR + "/"
-                        + test.get("frame"));
-                final Map<String, Object> frameJson = (Map<String, Object>) JSONUtils
-                        .fromInputStream(frameStream);
-                result = JsonLdProcessor.frame(input, frameJson, options);
-            } else if (testType.contains("jld:ToRDFTest")) {
-                options.format = "application/nquads";
-                result = JsonLdProcessor.toRDF(input, options);
-                result = ((String) result).trim();
-            } else if (testType.contains("jld:FromRDFTest")) {
-                // result = JSONLD.fromRDF(input, new NQuadJSONLDSerializer());
-                result = JsonLdProcessor.fromRDF(input, options);
-            } else if (testType.contains("jld:SimplifyTest")) {
-                result = JsonLdProcessor.simplify(input, options);
+         
             } else {
                 assertFalse("Unknown test type", true);
             }*/

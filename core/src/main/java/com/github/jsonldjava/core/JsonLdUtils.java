@@ -182,6 +182,14 @@ public class JsonLdUtils {
                 .containsKey("@id"));
     }
     
+    // TODO: fix this test
+	public static boolean isRelativeIri(String value) {
+		if (!(isKeyword(value) || isAbsoluteIri(value))) {
+			return true;
+		}
+		return false;
+	}
+    
 	////////////////////////////////////////////////////// OLD CODE BELOW
     
     /**

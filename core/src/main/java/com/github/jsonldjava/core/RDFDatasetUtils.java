@@ -250,8 +250,13 @@ public class RDFDatasetUtils {
             quad += s.getValue();
         }
 
-        // predicate is always an IRI
-        quad += " <" + escape(p.getValue()) + "> ";
+        if (p.isIRI()) {
+        	quad += " <" + escape(p.getValue()) + "> ";
+        }
+        // otherwise it must be a bnode (TODO: can we only allow this if the flag is set in options?)
+        else {
+        	quad += " " + escape(p.getValue()) + " ";
+        }
 
         // object is IRI, bnode or literal
         if (o.isIRI()) {

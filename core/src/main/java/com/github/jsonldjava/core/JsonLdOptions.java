@@ -34,6 +34,11 @@ public class JsonLdOptions {
     private Boolean explicit = null;
     private Boolean omitDefault = null;
     
+    // rdf conversion options
+    Boolean useRdfType = false;
+    Boolean useNativeTypes = false;
+	private boolean produceGeneralizedRdf = false;
+
  
     public Boolean getEmbed() {
 		return embed;
@@ -91,6 +96,32 @@ public class JsonLdOptions {
 		this.base = base;
 	}
 	
+	
+	public Boolean getUseRdfType() {
+		return useRdfType;
+	}
+
+	public void setUseRdfType(Boolean useRdfType) {
+		this.useRdfType = useRdfType;
+	}
+
+	public Boolean getUseNativeTypes() {
+		return useNativeTypes;
+	}
+
+	public void setUseNativeTypes(Boolean useNativeTypes) {
+		this.useNativeTypes = useNativeTypes;
+	}
+
+
+	public boolean getProduceGeneralizedRdf() {
+		// TODO Auto-generated method stub
+		return this.produceGeneralizedRdf ;
+	}
+
+	public void setProduceGeneralizedRdf(Boolean produceGeneralizedRdf) {
+		this.produceGeneralizedRdf = produceGeneralizedRdf;
+	}
 	
 	// TODO: THE FOLLOWING ONLY EXIST SO I DON'T HAVE TO DELETE A LOT OF CODE, REMOVE IT WHEN DONE
 	public String format = null;

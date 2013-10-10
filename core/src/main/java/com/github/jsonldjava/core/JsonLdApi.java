@@ -1,11 +1,15 @@
 package com.github.jsonldjava.core;
 
 import static com.github.jsonldjava.core.JsonLdUtils.isKeyword;
+import static com.github.jsonldjava.core.JSONLDConsts.RDF_FIRST;
+import static com.github.jsonldjava.core.JSONLDConsts.RDF_NIL;
+import static com.github.jsonldjava.core.JSONLDConsts.RDF_REST;
+import static com.github.jsonldjava.core.JSONLDConsts.RDF_TYPE;
+import static com.github.jsonldjava.core.JSONLDConsts.RDF_LIST;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,7 +21,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.jsonldjava.core.JsonLdError.Error;
+import com.github.jsonldjava.core.RDFDataset.Quad;
 import com.github.jsonldjava.utils.JSONUtils;
+import com.github.jsonldjava.utils.Obj;
 
 public class JsonLdApi {
 
@@ -49,6 +55,7 @@ public class JsonLdApi {
     
     private void initialize(Object input, Object context, JsonLdOptions opts) throws JsonLdError {
     	// set option defaults (TODO: clone?)
+    	// NOTE: sane defaults should be set in JsonLdOptions constructor 
     	this.opts = opts;
     	
     	if (input instanceof List || input instanceof Map) {
@@ -1003,7 +1010,7 @@ public class JsonLdApi {
     private Map<String,String> blankNodeIdentifierMap = new LinkedHashMap<String, String>();
     private int blankNodeCounter = 0;
 
-	private String generateBlankNodeIdentifier(String id) {
+	String generateBlankNodeIdentifier(String id) {
 		if (id != null && blankNodeIdentifierMap.containsKey(id)) {
 			return blankNodeIdentifierMap.get(id);
 		}
@@ -1012,6 +1019,9 @@ public class JsonLdApi {
 			blankNodeIdentifierMap.put(id, bnid);
 		}
 		return bnid;
+	}
+	String generateBlankNodeIdentifier() {
+		return generateBlankNodeIdentifier(null);
 	}
 	
 	
@@ -1460,18 +1470,284 @@ public class JsonLdApi {
             }
         }
     }
+  
+    
+    /***
+     *       ____                          _      __                       ____  ____  _____      _    _                  _ _   _               
+     *      / ___|___  _ ____   _____ _ __| |_   / _|_ __ ___  _ __ ___   |  _ \|  _ \|  ___|    / \  | | __ _  ___  _ __(_) |_| |__  _ __ ___  
+     *     | |   / _ \| '_ \ \ / / _ \ '__| __| | |_| '__/ _ \| '_ ` _ \  | |_) | | | | |_      / _ \ | |/ _` |/ _ \| '__| | __| '_ \| '_ ` _ \ 
+     *     | |__| (_) | | | \ V /  __/ |  | |_  |  _| | | (_) | | | | | | |  _ <| |_| |  _|    / ___ \| | (_| | (_) | |  | | |_| | | | | | | | |
+     *      \____\___/|_| |_|\_/ \___|_|   \__| |_| |_|  \___/|_| |_| |_| |_| \_\____/|_|     /_/   \_\_|\__, |\___/|_|  |_|\__|_| |_|_| |_| |_|
+     *                                                                                                   |___/                                  
+     */
     
     /**
-       // recurse into @list
-            if (o instanceof Map && ((Map<String,Object>) o).containsKey("@list")) {
-                final Map<String, Object> list = new LinkedHashMap<String, Object>();
-                list.put("@list", new ArrayList());
-                addFrameOutput(state, output, property, list);
-                embedValues(state, (Map<String, Object>) o, "@list", list.get("@list"));
-                return;
+     * Helper class for node usages
+     * 
+     * @author tristan
+     */
+    private class UsagesNode {
+    	public UsagesNode(NodeMapNode node, String property, Map<String,Object> value) {
+    		this.node = node;
+    		this.property = property;
+    		this.value = value;
+    	}
+    	public NodeMapNode node = null;
+    	public String property = null;
+    	public Map<String,Object> value = null;
+    }
+    
+    private class NodeMapNode extends LinkedHashMap<String,Object> {
+    	public List<UsagesNode> usages = new ArrayList();
+    	public NodeMapNode(String id) {
+    		super();
+    		this.put("@id", id);
+    	}
+    	// helper fucntion for 4.3.3
+		public boolean isWellFormedListNode() {
+			if (usages.size() != 1) {
+				return false;
+			}
+			int keys = 0;
+			if (containsKey(RDF_FIRST)) {
+				keys++;
+				if (!(get(RDF_FIRST) instanceof List && ((List<Object>)get(RDF_FIRST)).size() == 1)) {
+					return false;
+				}
+			}
+			if (containsKey(RDF_REST)) {
+				keys++;
+				if (!(get(RDF_REST) instanceof List && ((List<Object>)get(RDF_REST)).size() == 1)) {
+					return false;
+				}
+			}
+			if (containsKey("@type")) {
+				keys++;
+				if (!(get("@type") instanceof List && ((List<Object>)get("@type")).size() == 1) && RDF_LIST.equals(((List<Object>)get("@type")).get(0))) {
+					return false;
+				}
+			}
+			// TODO: SPEC: 4.3.3 has no mention of @id
+			if (containsKey("@id")) {
+				keys++;
+			}
+			if (keys < size()) {
+				return false;
+			}
+			return true;
+		}
+		// return this node without the usages variable
+		public Map<String,Object> serialize() {
+			return new LinkedHashMap<String,Object>(this);
+		}
+    }
+    
+    /**
+     * Converts RDF statements into JSON-LD.
+     * 
+     * @param statements
+     *            the RDF statements.
+     * @param options
+     *            the RDF conversion options.
+     * @param callback
+     *            (err, output) called once the operation completes.
+     * @throws JSONLDProcessingError
+     */
+    public List<Object> fromRDF(final RDFDataset dataset) throws JsonLdError {
+    	// 1)
+        final Map<String, NodeMapNode> defaultGraph = new LinkedHashMap<String, NodeMapNode>();
+        // 2)
+        final Map<String, Map<String, NodeMapNode>> graphMap = new LinkedHashMap<String, Map<String, NodeMapNode>>();
+        graphMap.put("@default", defaultGraph);
+
+        // 3/3.1)
+        for (final String name : dataset.graphNames()) {
+
+            final List<RDFDataset.Quad> graph = dataset.getQuads(name);
+
+            // 3.2+3.4)
+            Map<String,NodeMapNode> nodeMap;
+            if (!graphMap.containsKey(name)) {
+                nodeMap = new LinkedHashMap<String,NodeMapNode>();
+                graphMap.put(name, nodeMap);
+            } else {
+                nodeMap = (Map<String,NodeMapNode>) graphMap.get(name);
             }
 
-     */
+            // 3.3)
+            if (!"@default".equals(name) && !Obj.contains(defaultGraph, name)) {
+                defaultGraph.put(name, new NodeMapNode(name));
+            }
 
+            // 3.5)
+            for (final RDFDataset.Quad triple : graph) {
+                final String subject = triple.getSubject().getValue();
+                final String predicate = triple.getPredicate().getValue();
+                final RDFDataset.Node object = triple.getObject();
+
+                // 3.5.1+3.5.2)
+                NodeMapNode node;
+                if (!nodeMap.containsKey(subject)) {
+                    node = new NodeMapNode(subject);
+                    nodeMap.put(subject, node);
+                } else {
+                    node = (NodeMapNode) nodeMap.get(subject);
+                }
+
+                // 3.5.3)
+                if ((object.isIRI() || object.isBlankNode()) && !nodeMap.containsKey(object.getValue())) {
+                    nodeMap.put(object.getValue(), new NodeMapNode(object.getValue()));
+                }
+
+                // 3.5.4)
+                if (RDF_TYPE.equals(predicate) && (object.isIRI() || object.isBlankNode()) && !opts.getUseRdfType()) {
+                    JsonLdUtils.mergeValue(node, "@type", object.getValue());
+                    continue;
+                }
+
+                // 3.5.5)
+                Map<String, Object> value = object.toObject(opts.getUseNativeTypes());
+                
+                // 3.5.6+7)
+                JsonLdUtils.mergeValue(node, predicate, value);
+
+                // 3.5.8)
+                if (object.isBlankNode() || object.isIRI()) {
+                    // 3.5.8.1-3)
+                	nodeMap.get(object.getValue()).usages.add(new UsagesNode(node, predicate, value));
+                }
+            }
+        }
+
+        // 4)
+        for (final String name : graphMap.keySet()) {
+            final Map<String, NodeMapNode> graph = graphMap.get(name);
+
+            // 4.1)
+            if (!graph.containsKey(RDF_NIL)) {
+            	continue;
+            }
+            
+            // 4.2)
+            NodeMapNode nil = graph.get(RDF_NIL);
+            // 4.3)
+            for (UsagesNode usage : nil.usages) {
+            	// 4.3.1)
+            	NodeMapNode node = usage.node;
+            	String property = usage.property;
+            	Map<String,Object> head = usage.value;
+            	// 4.3.2)
+            	List<Object> list = new ArrayList<Object>();
+            	List<String> listNodes = new ArrayList<String>();
+            	// 4.3.3)
+            	while (RDF_REST.equals(property) && node.isWellFormedListNode()) {
+            		// 4.3.3.1)
+            		list.add(((List<Object>) node.get(RDF_FIRST)).get(0));
+            		// 4.3.3.2)
+                    listNodes.add((String) node.get("@id"));
+                    // 4.3.3.3)
+                    UsagesNode nodeUsage = node.usages.get(0);
+                    // 4.3.3.4)
+                    node = nodeUsage.node;
+                    property = nodeUsage.property;
+                    head = nodeUsage.value;
+                    // 4.3.3.5)
+                    if (!JsonLdUtils.isBlankNode(node)) {
+                    	break;
+                    }
+            	}
+            	// 4.3.4)
+            	if (RDF_FIRST.equals(property)) {
+            		// 4.3.4.1)
+            		if (RDF_NIL.equals(node.get("@id"))) {
+            			continue;
+            		}
+            		// 4.3.4.3)
+            		String headId = (String) head.get("@id");
+            		// 4.3.4.4-5)
+            		head = (Map<String, Object>) ((List<Object>) graph.get(headId).get(RDF_REST)).get(0);
+            		// 4.3.4.6)
+            		list.remove(list.size()-1);
+            		listNodes.remove(listNodes.size()-1);
+            	}
+            	// 4.3.5)
+            	head.remove("@id");
+            	// 4.3.6)
+            	Collections.reverse(list);
+            	// 4.3.7)
+            	head.put("@list", list);
+            	// 4.3.8)
+            	for (String nodeId : listNodes) {
+            		graph.remove(nodeId);
+            	}
+            }
+        }
+
+        // 5)
+        final List<Object> result = new ArrayList<Object>();
+        // 6)
+        final List<String> ids = new ArrayList<String>(defaultGraph.keySet());
+        Collections.sort(ids);
+        for (final String subject : ids) {
+            final NodeMapNode node = defaultGraph.get(subject);
+            // 6.1)
+            if (graphMap.containsKey(subject)) {
+            	// 6.1.1)
+                node.put("@graph", new ArrayList<Object>());
+                // 6.1.2)
+                final List<String> keys = new ArrayList<String>(graphMap.get(subject).keySet());
+                Collections.sort(keys);
+                for (final String s : keys) {
+                    final NodeMapNode n = graphMap.get(subject).get(s);
+                    if (n.size() == 1 && n.containsKey("@id")) {
+                    	continue;
+                    }
+                    ((List<Object>) node.get("@graph")).add(n.serialize());
+                }
+            }
+            // 6.2)
+            if (node.size() == 1 && node.containsKey("@id")) {
+            	continue;
+            }
+            result.add(node.serialize());
+        }
+
+        return result;
+    }
+    
+    /***
+     *       ____                          _     _          ____  ____  _____      _    _                  _ _   _               
+     *      / ___|___  _ ____   _____ _ __| |_  | |_ ___   |  _ \|  _ \|  ___|    / \  | | __ _  ___  _ __(_) |_| |__  _ __ ___  
+     *     | |   / _ \| '_ \ \ / / _ \ '__| __| | __/ _ \  | |_) | | | | |_      / _ \ | |/ _` |/ _ \| '__| | __| '_ \| '_ ` _ \ 
+     *     | |__| (_) | | | \ V /  __/ |  | |_  | || (_) | |  _ <| |_| |  _|    / ___ \| | (_| | (_) | |  | | |_| | | | | | | | |
+     *      \____\___/|_| |_|\_/ \___|_|   \__|  \__\___/  |_| \_\____/|_|     /_/   \_\_|\__, |\___/|_|  |_|\__|_| |_|_| |_| |_|
+     *                                                                                    |___/                                  
+     */
+    
+    /**
+     * Adds RDF triples for each graph in the given node map to an RDF dataset.
+     * 
+     * @return the RDF dataset.
+     * @throws JsonLdError 
+     */
+    public RDFDataset toRDF() throws JsonLdError {
+    	// TODO: make the default generateNodeMap call (i.e. without a graphName) create and return the nodeMap
+        final Map<String, Object> nodeMap = new LinkedHashMap<String, Object>();
+        nodeMap.put("@default", new LinkedHashMap<String, Object>());
+        generateNodeMap(this.value, nodeMap);
+
+        final RDFDataset dataset = new RDFDataset(this);
+        
+        for (String graphName : nodeMap.keySet()) {
+        	// 4.1)
+        	if (JsonLdUtils.isRelativeIri(graphName)) {
+        		continue;
+        	}
+            final Map<String, Object> graph = (Map<String, Object>) nodeMap.get(graphName);
+            dataset.graphToRDF(graphName, graph);
+        }
+        
+        return dataset;
+    }
 
 }

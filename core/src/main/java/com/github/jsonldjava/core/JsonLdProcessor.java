@@ -8,6 +8,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.jsonldjava.core.JsonLdError.Error;
+import com.github.jsonldjava.impl.NQuadRDFParser;
+import com.github.jsonldjava.impl.NQuadTripleCallback;
+import com.github.jsonldjava.impl.TurtleRDFParser;
+import com.github.jsonldjava.impl.TurtleTripleCallback;
 
 /** 
  * http://json-ld.org/spec/latest/json-ld-api/#the-jsonldprocessor-interface
@@ -218,10 +222,172 @@ public class JsonLdProcessor {
 		JsonLdUtils.removePreserve(activeCtx, rval, options);
 		return rval;
 	}
+	
+	 /**
+     * a registry for RDF Parsers (in this case, JSONLDSerializers) used by
+     * fromRDF if no specific serializer is specified and options.format is set.
+     * 
+     * TODO: this would fit better in the document loader class
+     */
+    private static Map<String, RDFParser> rdfParsers = new LinkedHashMap<String, RDFParser>() {
+        {
+            // automatically register nquad serializer
+            put("application/nquads", new NQuadRDFParser());
+            put("text/turtle", new TurtleRDFParser());
+        }
+    };
 
-	public static Map<String, Object> fromRDF(String manifestFile,
-			JsonLdOptions jsonLdOptions) throws JsonLdError {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    public static void registerRDFParser(String format, RDFParser parser) {
+        rdfParsers.put(format, parser);
+    }
+
+    public static void removeRDFParser(String format) {
+        rdfParsers.remove(format);
+    }
+
+	 /**
+     * Converts an RDF dataset to JSON-LD.
+     * 
+     * @param dataset
+     *            a serialized string of RDF in a format specified by the format
+     *            option or an RDF dataset to convert.
+     * @param [options] the options to use: [format] the format if input is not
+     *        an array: 'application/nquads' for N-Quads (default). [useRdfType]
+     *        true to use rdf:type, false to use @type (default: false).
+     *        [useNativeTypes] true to convert XSD types into native types
+     *        (boolean, integer, double), false not to (default: true).
+     * 
+     * @param callback
+     *            (err, output) called once the operation completes.
+     */
+    public static Object fromRDF(Object dataset, JsonLdOptions options) throws JsonLdError {
+        // handle non specified serializer case
+
+        RDFParser parser = null;
+
+        if (options.format == null && dataset instanceof String) {
+            // attempt to parse the input as nquads
+            options.format = "application/nquads";
+        }
+
+        if (rdfParsers.containsKey(options.format)) {
+            parser = rdfParsers.get(options.format);
+        } else {
+            throw new JsonLdError("Unknown input format.").setType(
+            		JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format", options.format);
+        }
+
+        // convert from RDF
+        return fromRDF(dataset, options, parser);
+    }
+
+    public static Object fromRDF(Object dataset) throws JsonLdError {
+        return fromRDF(dataset, new JsonLdOptions(""));
+    }
+
+    /**
+     * Uses a specific serializer.
+     * 
+     */
+    public static Object fromRDF(Object input, JsonLdOptions options, RDFParser parser)
+            throws JsonLdError {
+
+        final RDFDataset dataset = parser.parse(input);
+
+        // convert from RDF
+        final Object rval = new JsonLdApi(options).fromRDF(dataset);
+
+        // re-process using the generated context if outputForm is set
+        if (options.outputForm != null) {
+            if ("expanded".equals(options.outputForm)) {
+                return rval;
+            } else if ("compacted".equals(options.outputForm)) {
+                return compact(rval, dataset.getContext(), options);
+            } else if ("flattened".equals(options.outputForm)) {
+                return flatten(rval, dataset.getContext(), options);
+            } else {
+                throw new JsonLdError("Unknown value for output form").setType(
+                        Error.INVALID_INPUT).setDetail("outputForm", options.outputForm);
+            }
+        }
+        return rval;
+    }
+
+    public static Object fromRDF(Object input, RDFParser parser) throws JsonLdError {
+        return fromRDF(input, new JsonLdOptions(""), parser);
+    }
+    
+    /**
+     * Outputs the RDF dataset found in the given JSON-LD object.
+     * 
+     * @param input
+     *            the JSON-LD input.
+     * @param callback
+     *            A callback that is called when the input has been converted to
+     *            Quads (null to use options.format instead).
+     * @param [options] the options to use: [base] the base IRI to use. [format]
+     *        the format to use to output a string: 'application/nquads' for
+     *        N-Quads (default). [loadContext(url, callback(err, url, result))]
+     *        the context loader.
+     * @param callback
+     *            (err, dataset) called once the operation completes.
+     */
+    public static Object toRDF(Object input, JSONLDTripleCallback callback, JsonLdOptions options)
+            throws JsonLdError {
+
+        Object expandedInput = expand(input, options);
+
+        JsonLdApi api = new JsonLdApi(expandedInput, options);
+        final RDFDataset dataset = api.toRDF();
+        
+        /*
+        // generate namespaces from context
+        if (options.useNamespaces) {
+            List<Map<String, Object>> _input;
+            if (isArray(input)) {
+                _input = (List<Map<String, Object>>) input;
+            } else {
+                _input = new ArrayList<Map<String, Object>>();
+                _input.add((Map<String, Object>) input);
+            }
+            for (final Map<String, Object> e : _input) {
+                if (e.containsKey("@context")) {
+                    dataset.parseContext((Map<String, Object>) e.get("@context"));
+                }
+            }
+        }
+        */
+
+        if (callback != null) {
+            return callback.call(dataset);
+        }
+
+        if (options.format != null) {
+            if ("application/nquads".equals(options.format)) {
+                return new NQuadTripleCallback().call(dataset);
+            } else if ("text/turtle".equals(options.format)) {
+                return new TurtleTripleCallback().call(dataset);
+            } else {
+                throw new JsonLdError("Unknown output format.").setType(
+                        JsonLdError.Error.UNKNOWN_FORMAT).setDetail("format",
+                        options.format);
+            }
+        }
+        return dataset;
+    }
+
+    public static Object toRDF(Object input, JsonLdOptions options) throws JsonLdError {
+        return toRDF(input, null, options);
+    }
+
+    public static Object toRDF(Object input, JSONLDTripleCallback callback)
+            throws JsonLdError {
+        return toRDF(input, callback, new JsonLdOptions(""));
+    }
+
+    public static Object toRDF(Object input) throws JsonLdError {
+        return toRDF(input, new JsonLdOptions(""));
+    }
+
+    
 }

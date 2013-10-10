@@ -245,7 +245,6 @@ public class URL {
     public static String resolve(String baseUri, String pathToResolve) {
 		// TODO: some input will need to be normalized to perform the expected result with java
     	// TODO: we can do this without using java URI!
-		//System.out.println(baseUri + " -- " + pathToResolve);
 		if (baseUri == null) {
 			return pathToResolve;
 		}
