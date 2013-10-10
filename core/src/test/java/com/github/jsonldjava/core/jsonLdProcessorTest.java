@@ -245,8 +245,7 @@ public class jsonLdProcessorTest {
                 || testType.contains("jld:FrameTest") 
                 || testType.contains("jld:FromRDFTest")
                 || testType.contains("jld:ToRDFTest")
-                      //  || testType.contains("jld:NormalizeTest")
-                      //  
+                || testType.contains("jld:NormalizeTest")
                 ) {
                     // System.out.println("Adding test: " + test.get("name"));
                     rdata.add(new Object[] {
@@ -433,16 +432,13 @@ public class jsonLdProcessorTest {
                 options.format = "application/nquads";
                 result = JsonLdProcessor.toRDF(input, options);
                 result = ((String) result).trim();
-            } 
-            /*
-            if (testType.contains("jld:NormalizeTest")) {
+            } else if (testType.contains("jld:NormalizeTest")) {
                 options.format = "application/nquads";
                 result = JsonLdProcessor.normalize(input, options);
                 result = ((String) result).trim();
-         
             } else {
                 assertFalse("Unknown test type", true);
-            }*/
+            }
         } catch (final JsonLdError e) {
             result = e;
         }

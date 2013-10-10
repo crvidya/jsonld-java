@@ -388,6 +388,38 @@ public class JsonLdProcessor {
     public static Object toRDF(Object input) throws JsonLdError {
         return toRDF(input, new JsonLdOptions(""));
     }
+    
+    /**
+     * Performs RDF dataset normalization on the given JSON-LD input. The output
+     * is an RDF dataset unless the 'format' option is used.
+     * 
+     * @param input
+     *            the JSON-LD input to normalize.
+     * @param [options] the options to use: [base] the base IRI to use. [format]
+     *        the format if output is a string: 'application/nquads' for
+     *        N-Quads. [loadContext(url, callback(err, url, result))] the
+     *        context loader.
+     * @param callback
+     *            (err, normalized) called once the operation completes.
+     * @throws JSONLDProcessingError
+     */
+    public static Object normalize(Object input, JsonLdOptions options) throws JsonLdError {
+        
+        final JsonLdOptions opts = options.clone();
+        opts.format = null;
+        RDFDataset dataset;
+        try {
+            dataset = (RDFDataset) toRDF(input, opts);
+        } catch (final JsonLdError e) {
+            throw new JsonLdError(
+                    "Could not convert input to RDF dataset before normalization.").setType(
+                    		JsonLdError.Error.NORMALIZE_ERROR).setDetail("cause", e);
+        }
+        return new JsonLdApi(options).normalize(dataset);
+    }
 
+    public static Object normalize(Object input) throws JsonLdError {
+        return normalize(input, new JsonLdOptions(""));
+    }
     
 }

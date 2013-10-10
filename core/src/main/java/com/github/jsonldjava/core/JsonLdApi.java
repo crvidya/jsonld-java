@@ -1750,4 +1750,77 @@ public class JsonLdApi {
         return dataset;
     }
 
+    /***
+     *      _   _                            _ _          _   _                  _    _                  _ _   _               
+     *     | \ | | ___  _ __ _ __ ___   __ _| (_)______ _| |_(_) ___  _ __      / \  | | __ _  ___  _ __(_) |_| |__  _ __ ___  
+     *     |  \| |/ _ \| '__| '_ ` _ \ / _` | | |_  / _` | __| |/ _ \| '_ \    / _ \ | |/ _` |/ _ \| '__| | __| '_ \| '_ ` _ \ 
+     *     | |\  | (_) | |  | | | | | | (_| | | |/ / (_| | |_| | (_) | | | |  / ___ \| | (_| | (_) | |  | | |_| | | | | | | | |
+     *     |_| \_|\___/|_|  |_| |_| |_|\__,_|_|_/___\__,_|\__|_|\___/|_| |_| /_/   \_\_|\__, |\___/|_|  |_|\__|_| |_|_| |_| |_|
+     *                                                                                  |___/                                  
+     */
+    
+    /**
+     * Performs RDF normalization on the given JSON-LD input.
+     * 
+     * @param input
+     *            the expanded JSON-LD object to normalize.
+     * @param options
+     *            the normalization options.
+     * @param callback
+     *            (err, normalized) called once the operation completes.
+     * @throws JSONLDProcessingError
+     */
+    public Object normalize(Map<String, Object> dataset) throws JsonLdError {
+        // create quads and map bnodes to their associated quads
+        final List<Object> quads = new ArrayList<Object>();
+        final Map<String, Object> bnodes = new LinkedHashMap<String, Object>();
+        for (String graphName : dataset.keySet()) {
+            final List<Map<String, Object>> triples = (List<Map<String, Object>>) dataset
+                    .get(graphName);
+            if ("@default".equals(graphName)) {
+                graphName = null;
+            }
+            for (final Map<String, Object> quad : triples) {
+                if (graphName != null) {
+                    if (graphName.indexOf("_:") == 0) {
+                        final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
+                        tmp.put("type", "blank node");
+                        tmp.put("value", graphName);
+                        quad.put("name", tmp);
+                    } else {
+                        final Map<String, Object> tmp = new LinkedHashMap<String, Object>();
+                        tmp.put("type", "IRI");
+                        tmp.put("value", graphName);
+                        quad.put("name", tmp);
+                    }
+                }
+                quads.add(quad);
+
+                final String[] attrs = new String[] { "subject", "object", "name" };
+                for (final String attr : attrs) {
+                    if (quad.containsKey(attr)
+                            && "blank node".equals(((Map<String, Object>) quad.get(attr))
+                                    .get("type"))) {
+                        final String id = (String) ((Map<String, Object>) quad.get(attr))
+                                .get("value");
+                        if (!bnodes.containsKey(id)) {
+                            bnodes.put(id, new LinkedHashMap<String, List<Object>>() {
+                                {
+                                    put("quads", new ArrayList<Object>());
+                                }
+                            });
+                        }
+                        ((List<Object>) ((Map<String, Object>) bnodes.get(id)).get("quads"))
+                                .add(quad);
+                    }
+                }
+            }
+        }
+
+        // mapping complete, start canonical naming
+        final NormalizeUtils normalizeUtils = new NormalizeUtils(quads, bnodes, new UniqueNamer(
+                "_:c14n"), opts);
+        return normalizeUtils.hashBlankNodes(bnodes.keySet());
+    } 
+   
 }
