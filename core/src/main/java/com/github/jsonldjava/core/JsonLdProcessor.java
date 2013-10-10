@@ -338,11 +338,11 @@ public class JsonLdProcessor {
         JsonLdApi api = new JsonLdApi(expandedInput, options);
         final RDFDataset dataset = api.toRDF();
         
-        /*
+        
         // generate namespaces from context
         if (options.useNamespaces) {
             List<Map<String, Object>> _input;
-            if (isArray(input)) {
+            if (input instanceof List) {
                 _input = (List<Map<String, Object>>) input;
             } else {
                 _input = new ArrayList<Map<String, Object>>();
@@ -354,7 +354,6 @@ public class JsonLdProcessor {
                 }
             }
         }
-        */
 
         if (callback != null) {
             return callback.call(dataset);

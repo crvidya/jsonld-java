@@ -39,7 +39,7 @@ import com.github.jsonldjava.impl.TurtleTripleCallback;
 import com.github.jsonldjava.utils.JSONUtils;
 
 @RunWith(Parameterized.class)
-public class jsonLdProcessorTest {
+public class JsonLdProcessorTest {
 
     private static final String TEST_DIR = "json-ld.org";
 
@@ -168,7 +168,7 @@ public class jsonLdProcessorTest {
             JSONUtils.writePrettyPrint(new OutputStreamWriter(new FileOutputStream(reportOutputFile
                     + ".jsonld")), REPORT);
         }
-        /*
+        
         if ("text/plain".equals(reportFormat) || "nquads".equals(reportFormat)
                 || "nq".equals(reportFormat) || "nt".equals(reportFormat)
                 || "ntriples".equals(reportFormat) || "*".equals(reportFormat)) {
@@ -200,7 +200,6 @@ public class jsonLdProcessorTest {
             writer.write(rdf);
             writer.close();
         }
-        */
     }
 
     @Parameters(name = "{0}{1}")
@@ -240,7 +239,7 @@ public class jsonLdProcessorTest {
                     .get("sequence")) {
                 final List<String> testType = (List<String>) test.get("@type");
                 if (
-                (testType.contains("jld:ExpandTest") && !"Remote document".equals(manifest.get("name")))
+                testType.contains("jld:ExpandTest")
                 || testType.contains("jld:CompactTest")
                 || testType.contains("jld:FlattenTest")
                 || testType.contains("jld:FrameTest") 
@@ -256,13 +255,6 @@ public class jsonLdProcessorTest {
                     // TODO: many disabled while implementation is incomplete
                     // System.out.println("Skipping test: " + test.get("name"));
                 }
-
-                // Uncomment this to print a list of all the tests (may make
-                // debugging easier
-                // System.out.println("Added Test[" + count++ + "]: " +
-                // testgroup.get("group") + " " + test.get("name") + "..."
-                // + " (" + test.get("input") + "," + test.get("expect") + ")"
-                // );
             }
         }
         return rdata;
@@ -303,7 +295,7 @@ public class jsonLdProcessorTest {
     private final String group;
     private final Map<String, Object> test;
 
-    public jsonLdProcessorTest(final String group, final String id, final Map<String, Object> test) {
+    public JsonLdProcessorTest(final String group, final String id, final Map<String, Object> test) {
         this.group = group;
         this.test = test;
     }
