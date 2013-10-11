@@ -10,7 +10,7 @@ import org.apache.clerezza.rdf.core.MGraph;
 import org.apache.clerezza.rdf.core.Triple;
 import org.junit.Test;
 
-import com.github.jsonldjava.core.JSONLD;
+import com.github.jsonldjava.core.JsonLdProcessor;
 import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -24,7 +24,7 @@ public class ClerezzaTripleCallbackTest {
 
         final ClerezzaTripleCallback callback = new ClerezzaTripleCallback();
 
-        final MGraph graph = (MGraph) JSONLD.toRDF(input, callback);
+        final MGraph graph = (MGraph) JsonLdProcessor.toRDF(input, callback);
 
         for (final Triple t : graph) {
             System.out.println(t);
@@ -41,7 +41,7 @@ public class ClerezzaTripleCallbackTest {
 
         final ClerezzaTripleCallback callback = new ClerezzaTripleCallback();
 
-        final MGraph graph = (MGraph) JSONLD.toRDF(input, callback);
+        final MGraph graph = (MGraph) JsonLdProcessor.toRDF(input, callback);
 
         for (final Triple t : graph) {
             System.out.println(t);

@@ -16,6 +16,7 @@ import org.ontoware.rdf2go.model.node.URI;
 import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.core.RDFDataset;
 import com.github.jsonldjava.core.RDFParser;
+import com.github.jsonldjava.core.JsonLdError.Error;
 
 /**
  * Implementation of {@link RDFParser} which serializes the contents of a
@@ -125,7 +126,7 @@ public class RDF2GoRDFParser implements RDFParser {
         } else if (input instanceof Model) {
             importModel(result, (Model) input);
         } else {
-            throw new JsonLdError(
+            throw new JsonLdError(Error.INVALID_INPUT,
                     "RDF2Go parser expects a Model or ModelSet object as input");
         }
 

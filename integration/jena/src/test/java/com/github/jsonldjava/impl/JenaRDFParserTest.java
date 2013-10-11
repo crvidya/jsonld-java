@@ -12,7 +12,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.jsonldjava.core.JSONLD;
+import com.github.jsonldjava.core.JsonLdProcessor;
 import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 import com.hp.hpl.jena.rdf.model.Model;
@@ -65,7 +65,7 @@ public class JenaRDFParserTest {
         final Model modelResult = ModelFactory.createDefaultModel().read(
                 new ByteArrayInputStream(turtle.getBytes()), "", "TURTLE");
         final JenaRDFParser parser = new JenaRDFParser();
-        final Object json = JSONLD.fromRDF(modelResult, parser);
+        final Object json = JsonLdProcessor.fromRDF(modelResult, parser);
 
         assertTrue(JSONUtils.equals(json, expected));
     }

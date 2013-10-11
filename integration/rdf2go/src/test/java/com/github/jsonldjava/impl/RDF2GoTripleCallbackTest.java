@@ -10,7 +10,7 @@ import org.ontoware.rdf2go.model.Statement;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.github.jsonldjava.core.JSONLD;
+import com.github.jsonldjava.core.JsonLdProcessor;
 import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -30,7 +30,7 @@ public class RDF2GoTripleCallbackTest {
 
         final RDF2GoTripleCallback callback = new RDF2GoTripleCallback();
 
-        final ModelSet model = (ModelSet) JSONLD.toRDF(input, callback);
+        final ModelSet model = (ModelSet) JsonLdProcessor.toRDF(input, callback);
 
         // contains only one statement (type)
         final ClosableIterator<Statement> statements = model.iterator();

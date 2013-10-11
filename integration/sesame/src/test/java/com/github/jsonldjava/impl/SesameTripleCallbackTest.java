@@ -15,7 +15,7 @@ import org.openrdf.rio.helpers.StatementCollector;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.github.jsonldjava.core.JSONLD;
+import com.github.jsonldjava.core.JsonLdProcessor;
 import com.github.jsonldjava.core.JsonLdError;
 import com.github.jsonldjava.utils.JSONUtils;
 
@@ -37,7 +37,7 @@ public class SesameTripleCallbackTest {
                 new StatementCollector(graph), ValueFactoryImpl.getInstance(), parserConfig,
                 parseErrorListener);
 
-        JSONLD.toRDF(input, callback);
+        JsonLdProcessor.toRDF(input, callback);
 
         final Iterator<Statement> statements = graph.iterator();
 
